@@ -557,11 +557,14 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   if (balls === 0 && gs.money < 200) delete (criteria as Record<string, string>).catch;
   criteria.heal = `${INTENTS.heal} Healing at a Pokémon Center is free.`;
   // loop rule: the same team lost everything at the same place 2+ times -> 'progress' comes back once the team changes
+  // "changed" = a different lineup, or 5+ levels gained in total since that last loss
+  const lineup = (t: string) => t.split(', ').map((x) => x.replace(/ Lv\d+$/, '')).sort().join(',');
+  const levels = (t: string) => t.split(', ').reduce((a, x) => a + +(x.match(/Lv(\d+)$/)?.[1] ?? 0), 0);
   const teamNow = party.map((p) => `${p.species} Lv${p.level}`).join(', ');
-  const stuckAt = Object.entries(ctx.mem.losses ?? {}).find(([, l]) => l.count >= 2 && l.team === teamNow);
+  const stuckAt = Object.entries(ctx.mem.losses ?? {}).find(([, l]) => l.count >= 2 && lineup(l.team) === lineup(teamNow) && levels(teamNow) - levels(l.team) < 5);
   if (stuckAt) {
     delete (criteria as Record<string, string>).progress;
-    const note = ` (Moving on toward the objective isn't offered right now: all your Pokémon fainted at ${stuckAt[0]} ${stuckAt[1].count} times with exactly this team and these levels. It is offered again once the team changes: a level up, a new or different team member.)`;
+    const note = ` (Moving on toward the objective isn't offered right now: all your Pokémon fainted at ${stuckAt[0]} ${stuckAt[1].count} times with exactly this team and these levels. It is offered again once the team changes: a different lineup, or 5+ levels gained in total since then.)`;
     for (const k of Object.keys(criteria)) (criteria as Record<string, string>)[k] += note;
   }
   // swapping is only possible with Pokémon in the box
