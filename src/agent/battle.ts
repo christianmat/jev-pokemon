@@ -55,7 +55,9 @@ async function decideBattle(ctx: Ctx) {
   const opts: Record<string, string> = {};
   const actions: Record<string, () => void> = {};
   const focus = ctx.mem.intent?.value;
-  const catching = focus === 'catch';
+  // catching only makes sense with balls in the bag (otherwise the catch framing just makes it avoid KOs forever)
+  const ballsLeft = gs.bag().filter((i) => /BALL$/.test(i.name)).reduce((a, i) => a + i.qty, 0);
+  const catching = focus === 'catch' && ballsLeft > 0;
 
   for (const mv of b.player.moves) {
     const eff = rom.effectiveness(mv.type, b.enemy.types);
@@ -177,7 +179,7 @@ async function decideBattle(ctx: Ctx) {
   };
   const goal = b.kind === 'wild' && catching
     ? "The player's current focus is catching new Pokémon."
-    : 'Choose the best action for this battle.';
+    : `Choose the best action for this battle.${b.kind === 'wild' && ballsLeft === 0 ? " You have no Poké Balls, so this Pokémon can't be caught." : ''}`;
   const key = await ctx.jev.choose('battle', { ...state, currentFocus: focus }, `You are in a Pokémon battle. ${goal}`, opts);
   const shownName = ghost ? 'GHOST' : b.enemy.species;
   remember(ctx.mem.actions, `battle vs ${shownName}: ${key}`, 12);
