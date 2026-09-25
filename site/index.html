@@ -8,209 +8,171 @@
 <meta property="og:title" content="Jev plays Pokémon Red, live" />
 <meta property="og:description" content="An AI decision model is playing through all of Pokémon Red on a live stream. Every move is its own call." />
 <meta property="og:type" content="website" />
-<meta name="theme-color" content="#0f121a" />
+<meta name="theme-color" content="#0f380f" />
 <link rel="icon" href="favicon.svg" type="image/svg+xml" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Press+Start+2P&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
 <style>
+  /* Game Boy (DMG) four-shade palette */
   :root {
-    --bg: #0f121a;
-    --bg-2: #141821;
-    --ink: #ffffff;
-    --ink-2: rgba(255, 255, 255, 0.62);
-    --ink-3: rgba(255, 255, 255, 0.42);
-    --line: rgba(255, 255, 255, 0.1);
-    --panel: rgba(255, 255, 255, 0.04);
-    --brand: #015efb;
-    --brand-soft: rgba(1, 94, 251, 0.14);
-    --live: #f87171;
-    --gb: #9bbc0f;
+    --darkest: #0f380f;
+    --dark: #306230;
+    --light: #8bac0f;
+    --lightest: #9bbc0f;
+    --paper: #e0f8d0;
+    --shell: #c4c0bd;
+    --shell-dark: #8b8987;
+    --screen-rim: #5b5d6b;
+    --red: #e04848;
+    --px: 4px; /* pixel unit for chunky borders */
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--bg); color: var(--ink); }
-  body { font: 15px/1.6 Inter, ui-sans-serif, system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+  html, body { margin: 0; background: var(--darkest); color: var(--lightest); }
+  body {
+    font-family: "Press Start 2P", ui-monospace, monospace;
+    font-size: 12px;
+    line-height: 2;
+    -webkit-font-smoothing: none;
+    /* faint LCD dot grid */
+    background-image:
+      linear-gradient(rgba(155, 188, 15, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(155, 188, 15, 0.05) 1px, transparent 1px);
+    background-size: 6px 6px;
+  }
   a { color: inherit; }
-  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 0 20px; }
 
-  /* Hero */
-  .hero { position: relative; overflow: hidden; }
-  .hero::before { content: ""; position: absolute; inset: 0; pointer-events: none;
-    background: radial-gradient(46% 36% at 50% -4%, rgba(1, 94, 251, 0.2), transparent 70%); }
-  .hero::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.4;
-    background-image: linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
-    background-size: 44px 44px;
-    -webkit-mask-image: linear-gradient(180deg, transparent, #000 22%, #000 78%, transparent);
-            mask-image: linear-gradient(180deg, transparent, #000 22%, #000 78%, transparent); }
-  .hero .wrap { position: relative; z-index: 1; padding-top: 96px; padding-bottom: 64px; }
-  .top { display: flex; gap: 28px; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; }
-  .live { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 999px;
-    border: 1px solid rgba(248, 113, 113, 0.3); background: rgba(239, 68, 68, 0.1); color: #fca5a5;
-    font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; }
-  .live i { width: 6px; height: 6px; border-radius: 50%; background: var(--live); animation: pulse 1.6s ease-in-out infinite; }
-  @keyframes pulse { 50% { opacity: 0.35; } }
-  h1 { margin: 16px 0 0; font-size: clamp(34px, 5vw, 48px); line-height: 1.05; letter-spacing: -0.03em; font-weight: 700; }
-  h1 .pixel { font-family: "Press Start 2P", monospace; font-size: 0.5em; letter-spacing: 0; color: var(--gb); display: block; margin-bottom: 14px; }
-  .lede { margin: 12px 0 0; max-width: 560px; color: var(--ink-2); font-size: 16px; }
-  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
-  .btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; text-decoration: none; transition: transform .15s, background .15s; }
-  .btn svg { width: 15px; height: 15px; }
-  .btn.primary { background: #fff; color: #0f121a; box-shadow: 0 10px 30px -12px rgba(0,0,0,.6); }
-  .btn.primary:hover { transform: scale(1.02); }
-  .btn.ghost { border: 1px solid rgba(255,255,255,0.15); background: var(--panel); color: rgba(255,255,255,0.9); font-weight: 500; }
-  .btn.ghost:hover { background: rgba(255,255,255,0.1); }
-  .player { margin-top: 44px; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: #000;
-    box-shadow: 0 30px 80px -30px rgba(1, 94, 251, 0.5); }
-  .player .ratio { position: relative; aspect-ratio: 16 / 9; }
-  .player iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
-  .hint { margin-top: 12px; font-size: 12px; color: var(--ink-3); }
+  /* Pixel box: stepped double border like the in-game text box */
+  .pixel-box {
+    background: var(--paper);
+    color: var(--darkest);
+    box-shadow:
+      0 calc(-1 * var(--px)) 0 0 var(--darkest),
+      0 var(--px) 0 0 var(--darkest),
+      calc(-1 * var(--px)) 0 0 0 var(--darkest),
+      var(--px) 0 0 0 var(--darkest),
+      0 0 0 calc(2 * var(--px)) var(--paper),
+      0 calc(-3 * var(--px)) 0 0 var(--darkest),
+      0 calc(3 * var(--px)) 0 0 var(--darkest),
+      calc(-3 * var(--px)) 0 0 0 var(--darkest),
+      calc(3 * var(--px)) 0 0 0 var(--darkest);
+  }
 
-  /* Features */
-  section.band { border-top: 1px solid var(--line); }
-  .features { background: rgba(255,255,255,0.015); }
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px 40px; padding: 96px 0; }
-  @media (max-width: 860px) { .grid { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 560px) { .grid { grid-template-columns: 1fr; padding: 72px 0; } }
-  .icon { width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255,255,255,0.06);
-    display: inline-flex; align-items: center; justify-content: center; }
-  .icon svg { width: 20px; height: 20px; stroke: rgba(255,255,255,0.9); }
-  .feat h3 { margin: 16px 0 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
-  .feat p { margin: 6px 0 0; font-size: 13.5px; line-height: 1.6; color: var(--ink-2); }
+  /* Header */
+  header.wrap { padding-top: 64px; padding-bottom: 24px; }
+  .live { display: inline-flex; align-items: center; gap: 10px; color: var(--paper); font-size: 11px; }
+  .live i { width: 10px; height: 10px; background: var(--red); animation: blink 1s steps(2, start) infinite; }
+  @keyframes blink { to { visibility: hidden; } }
+  h1 { margin: 22px 0 0; font-size: clamp(20px, 4.2vw, 36px); line-height: 1.5; font-weight: 400; color: var(--paper);
+    text-shadow: 4px 4px 0 var(--dark); }
+  h1 span { color: var(--lightest); }
+  .lede { margin: 18px 0 0; max-width: 720px; color: var(--light); font-size: 12px; line-height: 2.1; }
+  .actions { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 30px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 12px 16px; font: inherit; font-size: 11px; text-decoration: none;
+    background: var(--lightest); color: var(--darkest);
+    box-shadow: 0 0 0 var(--px) var(--darkest), var(--px) var(--px) 0 var(--px) var(--dark);
+  }
+  .btn:hover { background: var(--paper); }
+  .btn:active { transform: translate(var(--px), var(--px)); box-shadow: 0 0 0 var(--px) var(--darkest); }
+  .btn.alt { background: var(--dark); color: var(--paper); }
+  .btn.alt:hover { background: var(--light); color: var(--darkest); }
+  .btn .arrow { font-size: 10px; }
 
-  /* Text sections */
-  .center { max-width: 660px; margin: 0 auto; padding: 104px 24px; text-align: center; }
-  .eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--brand); }
-  h2 { margin: 16px 0 0; font-size: clamp(28px, 4vw, 38px); line-height: 1.1; letter-spacing: -0.02em; font-weight: 700; }
-  .center p { margin: 20px 0 0; font-size: 17px; line-height: 1.65; color: var(--ink-2); }
-  .center p a { color: #fff; text-decoration: underline; text-decoration-color: rgba(255,255,255,0.3); text-underline-offset: 4px; }
-  .steps { margin: 28px auto 0; display: grid; gap: 10px; text-align: left; max-width: 520px; }
-  .steps div { display: flex; gap: 12px; align-items: baseline; font-size: 14px; color: var(--ink-2); }
-  .steps b { font-family: "Press Start 2P", monospace; font-size: 10px; color: var(--gb); font-weight: 400; min-width: 22px; }
+  /* Handheld bezel around the stream */
+  .console {
+    margin: 36px 0 12px; padding: 22px 22px 18px; background: var(--shell);
+    box-shadow: inset -6px -6px 0 var(--shell-dark), inset 6px 6px 0 #dcd9d6;
+  }
+  .bezel { background: var(--screen-rim); padding: 18px 22px 22px; box-shadow: inset 0 0 0 4px #4a4c58; }
+  .bezel-top { display: flex; align-items: center; gap: 10px; color: #b7b9c8; font-size: 9px; margin-bottom: 12px; letter-spacing: 1px; }
+  .bezel-top .led { width: 8px; height: 8px; background: var(--red); box-shadow: 0 0 6px var(--red); }
+  .bezel-top .rule { flex: 1; height: 4px; background: repeating-linear-gradient(90deg, #7d3a5e 0 40%, transparent 40% 50%, #2f3f86 50% 90%, transparent 90%); opacity: 0.8; }
+  .screen { position: relative; aspect-ratio: 16 / 9; background: var(--darkest); box-shadow: 0 0 0 4px var(--darkest); }
+  .screen iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .brand { margin-top: 14px; color: #2f3f86; font-size: 13px; font-style: italic; }
+  .brand b { color: #7d3a5e; font-style: normal; }
+  .hint { color: var(--light); font-size: 10px; line-height: 2; margin: 8px 0 0; }
 
-  /* Frigade plug */
-  .plug { position: relative; overflow: hidden; background: linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%); }
-  .plug::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 210px; pointer-events: none;
-    background: radial-gradient(44% 100% at 50% 100%, rgba(1, 94, 251, 0.18), transparent 74%); }
-  .plug .center { position: relative; z-index: 1; }
-  .pill { display: inline-flex; align-items: center; gap: 8px; margin-top: 32px; padding: 9px 16px; border-radius: 999px;
-    border: 1px solid rgba(1, 94, 251, 0.35); background: rgba(1, 94, 251, 0.1); color: #fff; font-size: 13px; font-weight: 500;
-    text-decoration: none; box-shadow: 0 12px 34px -14px rgba(1, 94, 251, 0.7); transition: background .15s; }
-  .pill:hover { background: rgba(1, 94, 251, 0.18); }
-  .pill svg { width: 15px; height: 15px; }
-  .pill .arrow { transition: transform .15s; }
-  .pill:hover .arrow { transform: translateX(2px); }
+  /* Dialog-box section */
+  section { padding: 72px 0; }
+  .dialog { position: relative; margin: 0 auto; max-width: 820px; padding: 28px 30px 34px; font-size: 13px; line-height: 2.2; }
+  .dialog p { margin: 0 0 18px; }
+  .dialog .who { color: var(--dark); }
+  .dialog .caret { position: absolute; right: 26px; bottom: 16px; font-size: 12px; animation: bob 0.8s steps(2, start) infinite; }
+  @keyframes bob { to { transform: translateY(4px); } }
+  .choice { list-style: none; margin: 22px 0 0; padding: 0; }
+  .choice li { margin: 6px 0; }
+  .choice a { text-decoration: none; }
+  .choice a::before { content: "\00a0\00a0"; }
+  .choice a:hover::before, .choice a:focus-visible::before { content: "▶\00a0"; }
+  .choice a:hover { text-decoration: underline; text-underline-offset: 6px; }
 
-  footer { border-top: 1px solid var(--line); }
-  footer .wrap { display: flex; gap: 12px 24px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding-top: 28px; padding-bottom: 28px; font-size: 13px; color: var(--ink-3); }
-  footer a { text-decoration: none; }
-  footer a:hover { color: rgba(255,255,255,0.8); }
-  footer .links { display: flex; gap: 20px; }
-  .made a { color: rgba(255,255,255,0.75); }
+  footer { border-top: 4px solid var(--dark); padding: 26px 0 40px; color: var(--light); font-size: 10px; line-height: 2.2; }
+  footer .row { display: flex; justify-content: space-between; gap: 14px 28px; flex-wrap: wrap; }
+  footer a { color: var(--paper); text-decoration: none; }
+  footer a:hover { text-decoration: underline; text-underline-offset: 5px; }
+  footer .links { display: flex; gap: 22px; }
+
+  @media (max-width: 640px) {
+    body { font-size: 11px; }
+    header.wrap { padding-top: 40px; }
+    .console { padding: 12px; }
+    .bezel { padding: 10px 10px 14px; }
+    .bezel-top { font-size: 7px; }
+    .dialog { padding: 22px 20px 30px; font-size: 11px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .live i, .dialog .caret { animation: none; } }
 </style>
 </head>
 <body>
-  <main>
-    <section class="hero">
-      <div class="wrap">
-        <div class="top">
-          <div>
-            <span class="live"><i></i>Live</span>
-            <h1><span class="pixel">PRESS START</span>Jev plays Pokémon Red</h1>
-            <p class="lede">An AI decision model is playing through the whole game on a live stream. It picks every route, battle move, and catch on its own.</p>
-          </div>
-          <div class="actions">
-            <a class="btn primary" href="https://www.youtube.com/watch?v=4kaC4ZHhw_Q" target="_blank" rel="noopener">
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11.04-6.86a1 1 0 0 0 0-1.72L9.5 4.28A1 1 0 0 0 8 5.14Z"/></svg>
-              Watch on YouTube
-            </a>
-            <a class="btn ghost" href="https://github.com/christianmat/jev-pokemon" target="_blank" rel="noopener">
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.73.5.5 5.73.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.43-2.7 5.41-5.27 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z"/></svg>
-              Source code
-            </a>
-          </div>
-        </div>
+  <header class="wrap">
+    <div class="live"><i></i>LIVE NOW</div>
+    <h1>JEV PLAYS<br /><span>POKéMON RED</span></h1>
+    <p class="lede">An AI decision model is playing the whole game on a live stream. It picks every route, battle move, and catch on its own.</p>
+    <div class="actions">
+      <a class="btn" href="https://www.youtube.com/watch?v=4kaC4ZHhw_Q" target="_blank" rel="noopener"><span class="arrow">▶</span>WATCH ON YOUTUBE</a>
+      <a class="btn alt" href="https://github.com/christianmat/jev-pokemon" target="_blank" rel="noopener">SOURCE CODE</a>
+    </div>
+  </header>
 
-        <div class="player">
-          <div class="ratio">
-            <iframe src="https://www.youtube.com/embed/4kaC4ZHhw_Q?autoplay=1&amp;mute=1&amp;rel=0" title="Jev plays Pokémon Red, live stream"
-              allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
-          </div>
-        </div>
-        <p class="hint">The stream starts muted. Unmute for the game audio. The panel on the right of the stream shows every decision with Jev's odds.</p>
-      </div>
-    </section>
-
-    <section class="band features">
-      <div class="wrap grid">
-        <div class="feat">
-          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M12 5v13"/></svg></span>
-          <h3>Jev makes every call</h3>
-          <p>Which door, which move, when to heal, what to catch. Each one is a Jev decision.</p>
-        </div>
-        <div class="feat">
-          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg></span>
-          <h3>No scripts, no cheats</h3>
-          <p>The bot only reads game memory and presses buttons. It never writes to the game.</p>
-        </div>
-        <div class="feat">
-          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></span>
-          <h3>Odds on screen</h3>
-          <p>Every decision shows Jev's top options and how likely it rated each one.</p>
-        </div>
-        <div class="feat">
-          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg></span>
-          <h3>About a dollar a day</h3>
-          <p>Jev answers in about 300 ms. A full day of play costs around a dollar in model calls.</p>
-        </div>
-        <div class="feat">
-          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/><circle cx="12" cy="12" r="4"/></svg></span>
-          <h3>Gets itself unstuck</h3>
-          <p>When the same move keeps failing, it tries something new or reloads a save.</p>
-        </div>
-        <div class="feat">
-          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span>
-          <h3>Run it yourself</h3>
-          <p>The whole harness is on GitHub. Bring your own copy of Pokémon Red to play.</p>
+  <main class="wrap">
+    <div class="console">
+      <div class="bezel">
+        <div class="bezel-top"><span class="led"></span><span>JEV LIVE FEED</span><span class="rule"></span></div>
+        <div class="screen">
+          <iframe src="https://www.youtube.com/embed/4kaC4ZHhw_Q?autoplay=1&amp;mute=1&amp;rel=0" title="Jev plays Pokémon Red, live stream"
+            allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
         </div>
       </div>
-    </section>
+      <div class="brand"><b>JEV</b> BOY</div>
+    </div>
+    <p class="hint">STARTS MUTED. UNMUTE FOR GAME AUDIO.<br />THE RIGHT PANEL SHOWS EVERY DECISION AND JEV'S ODDS.</p>
 
-    <section class="band">
-      <div class="center">
-        <div class="eyebrow">What is Jev?</div>
-        <h2>A model that decides instead of writing</h2>
-        <p><a href="https://en.wikipedia.org/wiki/Jev_(AI_model)" target="_blank" rel="noopener">Jev</a> from TypeSafe AI doesn't generate text. You give it a situation and a list of options, and it returns a choice with a probability for each one. We wanted to see how far that gets you in a game with hundreds of decisions, so we pointed it at Pokémon Red.</p>
-        <div class="steps">
-          <div><b>01</b><span>Read the game's memory: map, party, battle, on-screen text.</span></div>
-          <div><b>02</b><span>List the legal options, each with facts like type matchups and distance to the goal.</span></div>
-          <div><b>03</b><span>Ask Jev to choose, then press the buttons to carry out its choice.</span></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="band plug">
-      <div class="center">
-        <div class="eyebrow">Built at Frigade</div>
-        <h2>Every adventure needs a Professor Oak</h2>
-        <p>Jev only knew where to go next because it had a guide. Your users need one too. Frigade is an AI assistant that learns your product on its own and shows each user the next step, right inside your app.</p>
-        <a class="pill" href="https://frigade.com/?utm_source=jev-pokemon&amp;utm_medium=landing" target="_blank" rel="noopener">
-          <svg viewBox="0 0 15 19" fill="none" aria-hidden="true"><path d="M6.27148 6.82324L8.53711 6.83789C7.75402 7.37653 7.09786 8.08101 6.61621 8.90039C6.13474 9.71964 5.83874 10.635 5.74902 11.5811L5.71973 12.6895V12.9434H5.7168V15.0625C5.72183 15.6878 5.47855 16.2895 5.04004 16.7354C4.60138 17.1811 4.00332 17.4353 3.37793 17.4404C2.75241 17.4455 2.14998 17.2014 1.7041 16.7627C1.25828 16.324 1.00507 15.726 1 15.1006V12.1377C0.99702 10.7303 1.55263 9.3789 2.54492 8.38086C2.83274 8.09004 3.15309 7.83317 3.5 7.61621C4.33014 7.09684 5.29031 6.82229 6.26953 6.82324H6.27148ZM11.5742 6.85645C11.7329 6.85699 11.891 6.87407 12.0459 6.9082L12.0488 6.90918L12.0527 6.91016C12.58 7.02326 13.0529 7.31373 13.3916 7.7334C13.7303 8.15312 13.9149 8.67649 13.9141 9.21582V9.27441C13.9014 9.80327 13.7104 10.3122 13.373 10.7197C13.0356 11.1273 12.571 11.4093 12.0537 11.5205H12.0498C11.8881 11.5557 11.7231 11.5742 11.5576 11.5742L6.86035 11.5459C6.99841 10.3512 7.5372 9.23802 8.38867 8.38867C9.24516 7.53066 10.3693 6.99025 11.5742 6.85645ZM11.5537 1.0332H11.5557C12.1811 1.03304 12.7812 1.28158 13.2236 1.72363C13.6662 2.1658 13.9147 2.76599 13.915 3.3916C13.9153 4.01714 13.6667 4.61703 13.2246 5.05957C12.7825 5.50201 12.1831 5.75063 11.5576 5.75098H11.5557L6.27344 5.71875H6.27051C5.43345 5.71774 4.60439 5.8818 3.83105 6.20215C3.05757 6.52261 2.35486 6.99308 1.76367 7.58594C1.48162 7.86724 1.2261 8.17532 1 8.50586V6.27051C1.0001 4.81536 1.5898 3.49845 2.54492 2.54395C3.03329 2.05382 3.61374 1.66431 4.25293 1.39941C4.8921 1.13453 5.57765 0.999007 6.26953 1L11.5537 1.0332Z" fill="#015efb"/></svg>
-          Explore Frigade
-          <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="#015efb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-        </a>
+    <section>
+      <div class="dialog pixel-box">
+        <p><span class="who">OAK:</span> JEV only knew where to go next because it had a guide.</p>
+        <p>Your users need one too! FRIGADE is an AI assistant that learns your product on its own and shows each user the next step, right inside your app.</p>
+        <ul class="choice">
+          <li><a href="https://frigade.com/?utm_source=jev-pokemon&amp;utm_medium=landing" target="_blank" rel="noopener">EXPLORE FRIGADE</a></li>
+          <li><a href="https://github.com/christianmat/jev-pokemon" target="_blank" rel="noopener">READ THE CODE</a></li>
+        </ul>
+        <span class="caret" aria-hidden="true">▼</span>
       </div>
     </section>
   </main>
 
   <footer>
-    <div class="wrap">
-      <span class="made">Made by <a href="https://github.com/christianmat" target="_blank" rel="noopener">Christian Mathiesen</a> at <a href="https://frigade.com/?utm_source=jev-pokemon&amp;utm_medium=footer" target="_blank" rel="noopener">Frigade</a>.</span>
-      <span>Not affiliated with Nintendo, Game Freak, or The Pokémon Company. No ROM included.</span>
-      <div class="links">
-        <a href="https://github.com/christianmat/jev-pokemon" target="_blank" rel="noopener">GitHub</a>
-        <a href="https://www.youtube.com/watch?v=4kaC4ZHhw_Q" target="_blank" rel="noopener">YouTube</a>
-      </div>
+    <div class="wrap row">
+      <span>MADE BY <a href="https://github.com/christianmat" target="_blank" rel="noopener">CHRISTIAN MATHIESEN</a> AT <a href="https://frigade.com/?utm_source=jev-pokemon&amp;utm_medium=footer" target="_blank" rel="noopener">FRIGADE</a></span>
+      <span class="links">
+        <a href="https://github.com/christianmat/jev-pokemon" target="_blank" rel="noopener">GITHUB</a>
+        <a href="https://www.youtube.com/watch?v=4kaC4ZHhw_Q" target="_blank" rel="noopener">YOUTUBE</a>
+      </span>
     </div>
+    <div class="wrap" style="margin-top:14px">NOT AFFILIATED WITH NINTENDO, GAME FREAK, OR THE POKéMON COMPANY. NO ROM INCLUDED.</div>
   </footer>
 </body>
 </html>
