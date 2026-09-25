@@ -361,7 +361,7 @@ function face(ctx: Ctx, tx: number, ty: number) {
   ctx.emu.press(d, 3, 6);
 }
 
-export async function execute(ctx: Ctx, c: Candidate, agent: Agent): Promise<void> {
+export async function execute(ctx: Ctx, c: Candidate, agent: Agent): Promise<WalkResult | undefined> {
   const { gs, emu } = ctx;
   const t = c.target;
   let res = walk(ctx, c.path);
@@ -371,8 +371,8 @@ export async function execute(ctx: Ctx, c: Candidate, agent: Agent): Promise<voi
     const again = buildCandidates(ctx).find((k) => k.key === c.key);
     if (again) res = walk(ctx, again.path);
   }
-  if (res === 'interrupted') { pendingTarget = { map: gs.mapId, key: c.key, resumes: resumingCount + 1 }; return; }
-  if (res !== 'ok') return;
+  if (res === 'interrupted') { pendingTarget = { map: gs.mapId, key: c.key, resumes: resumingCount + 1 }; return res; }
+  if (res !== 'ok') return res;
   switch (t.kind) {
     case 'warp': {
       emu.wait(20);
@@ -601,7 +601,9 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
   ctx.log('decision', `${ctx.gs.mapName}: ${c.key}`, { options: cands.length });
   ctx.mem.lastInteraction = null;
   const mapBefore = ctx.gs.mapId, mapNameBefore = ctx.gs.mapName;
-  await execute(ctx, c, agent);
+  const res = await execute(ctx, c, agent);
+  // a battle/dialog cut the walk short (e.g. a trainer spotted us): not a failed attempt, it gets resumed
+  if (res === 'interrupted') { tried[tk(c)] = Math.max(0, (tried[tk(c)] ?? 1) - 1); return; }
   if ((c.target.kind === 'exit' || c.target.kind === 'warp') && c.path.length) {
     // settle any dialog/cutscene the attempt caused, then check whether we actually left
     for (let i = 0; i < 400 && (ctx.gs.screen().hasTextBox || (ctx.gs.joyIgnore & 0xf0) || (ctx.gs.u8('wStatusFlags5') & 0x80)); i++) {
