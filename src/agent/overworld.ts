@@ -377,7 +377,8 @@ function walk(ctx: Ctx, path: Step[]): WalkResult {
     const btn = st.dir.toUpperCase() as 'UP';
     let moved = false;
     // first press may only turn the player; allow a second attempt
-    for (let f = 0; f < 40; f++) {
+    // generous: with many sprites on screen the game lags and one step can take well over 40 frames
+    for (let f = 0; f < 90; f++) {
       emu.frame([btn]);
       if (gs.x !== x0 || gs.y !== y0 || gs.mapId !== map0) { moved = true; break; }
       if (gs.inBattle || gs.screen().hasTextBox) break;
