@@ -52,9 +52,13 @@ export async function dialogStep(ctx: Ctx, purpose = 'dialog-menu') {
     rememberDialog(ctx.mem, s.dialog);
     const k = ctx.mem.lastInteraction;
     if (k) {
-      // keep this person's whole conversation (cleaned) — the last dialog lines since the interaction began
-      const said = ctx.mem.dialog.slice(-4).join(' ');
-      if (said.length > (ctx.mem.npcText[k] ?? '').length || !(ctx.mem.npcText[k] ?? '').includes(said.slice(0, 20))) ctx.mem.npcText[k] = said.slice(-300);
+      // only what was said since this interaction started is attributed to this person/sign
+      const talk = (ctx.mem.currentTalk ??= []);
+      const line = ctx.mem.dialog[ctx.mem.dialog.length - 1];
+      if (line && talk[talk.length - 1] !== line) {
+        if (talk.length && line.startsWith(talk[talk.length - 1])) talk[talk.length - 1] = line; else talk.push(line);
+      }
+      ctx.mem.npcText[k] = talk.join(' ').slice(0, 300);
     }
   }
   // Options screen: configure once (fast text, no battle animations), then leave.

@@ -185,9 +185,10 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const k = `${gs.mapName}:npc${sp.index}`;
     const said = mem.npcText[k];
     const OBJECTS: Record<string, string> = { POKE_BALL: 'a Poké Ball object', FOSSIL: 'a fossil lying on the ground', BOULDER: 'a boulder', POKEDEX: 'a Pokédex on a table', CLIPBOARD: 'a clipboard', PAPER: 'a piece of paper', OLD_AMBER: 'an amber stone', SNORLAX: 'a sleeping Snorlax' };
-    const kind = obj?.item != null ? `an item ball (${rom.items.get(obj.item) ?? 'item'})` : OBJECTS[spriteName] ?? (obj?.trainer ? `a trainer (${spriteName})` : `a person (${spriteName})`);
+    const who = obj?.trainerClass ?? spriteName;
+    const kind = obj?.item != null ? `an item ball (${rom.items.get(obj.item) ?? 'item'})` : OBJECTS[spriteName] ?? (obj?.trainer ? `a trainer (${who})` : `a person (${spriteName})`);
     const facts = `${kind} at (${sp.x},${sp.y}).${said ? ` Last time they said: "${said.slice(0, 300)}".` : ' Not yet talked to.'}${spriteName === 'NURSE' ? ' Heals the whole party.' : ''}${spriteName === 'CLERK' ? ' Shop clerk: buy items.' : ''}`;
-    const label = obj?.item != null ? `Pick up item ball at (${sp.x},${sp.y})` : OBJECTS[spriteName] ? `Examine the ${spriteName.toLowerCase().replace(/_/g, ' ')} at (${sp.x},${sp.y})` : `Talk to ${spriteName} at (${sp.x},${sp.y})`;
+    const label = obj?.item != null ? `Pick up item ball at (${sp.x},${sp.y})` : OBJECTS[spriteName] ? `Examine the ${spriteName.toLowerCase().replace(/_/g, ' ')} at (${sp.x},${sp.y})` : `Talk to ${obj?.trainer ? who : spriteName} at (${sp.x},${sp.y})`;
     add(label, blockers.has(sp.index) ? `${facts} ${blockers.get(sp.index)}` : facts, { kind: 'npc', index: sp.index, x: sp.x, y: sp.y, sprite: spriteName }, path);
   }
 
@@ -389,6 +390,7 @@ export async function execute(ctx: Ctx, c: Candidate, agent: Agent): Promise<voi
       const sp = gs.sprites().find((s) => s.index === t.index);
       const tx = sp?.x ?? t.x, ty = sp?.y ?? t.y;
       ctx.mem.lastInteraction = `${gs.mapName}:npc${t.index}`;
+      ctx.mem.currentTalk = [];
       ctx.mem.talked[ctx.mem.lastInteraction] = (ctx.mem.talked[ctx.mem.lastInteraction] ?? 0) + 1;
       face(ctx, tx, ty);
       tap(ctx, 'A', 20);
@@ -396,12 +398,14 @@ export async function execute(ctx: Ctx, c: Candidate, agent: Agent): Promise<voi
     }
     case 'sign': {
       ctx.mem.lastInteraction = `${gs.mapName}:sign${t.x},${t.y}`;
+      ctx.mem.currentTalk = [];
       face(ctx, t.x, t.y);
       tap(ctx, 'A', 20);
       return;
     }
     case 'hidden': {
       ctx.mem.lastInteraction = `${gs.mapName}:hidden${t.x},${t.y}`;
+      ctx.mem.currentTalk = [];
       face(ctx, t.x, t.y);
       tap(ctx, 'A', 20);
       return;

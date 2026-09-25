@@ -15,6 +15,7 @@ export interface Memory {
   stepsInMap: Record<string, Set<string>>;
   npcText: Record<string, string>;      // what an NPC/sign said last time
   lastInteraction: string | null;
+  currentTalk?: string[]; // lines spoken since the current interaction started
   intent: { value: string; key: string; age?: number } | null;
   triedNoProgress: Record<string, number>;
   blockedExits: Record<string, number>;

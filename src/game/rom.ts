@@ -13,7 +13,7 @@ export interface MoveData { id: number; name: string; effect: number; power: num
 export interface SpeciesData { id: number; dex: number; name: string; types: string[]; base: { hp: number; atk: number; def: number; spd: number; spc: number }; catchRate: number; tmhm: Uint8Array; stoneEvos: number[] }
 export interface Warp { x: number; y: number; destMap: number; destWarp: number }
 export interface Sign { x: number; y: number; textId: number }
-export interface MapObject { index: number; sprite: number; x: number; y: number; movement: number; textId: number; trainer: boolean; item: number | null }
+export interface MapObject { index: number; sprite: number; x: number; y: number; movement: number; textId: number; trainer: boolean; item: number | null; trainerClass?: string }
 export interface Connection { dir: 'north' | 'south' | 'west' | 'east'; map: number; yAlign: number; xAlign: number }
 export interface MapData {
   id: number; name: string; tileset: number; width: number; height: number;
@@ -26,6 +26,7 @@ export class Rom {
   readonly items = new Map<number, string>();
   readonly typeChart = new Map<string, number>(); // "ATK>DEF" -> multiplier
   readonly maps = new Map<number, MapData>();
+  trainerNames: string[] = [];
   readonly hidden = new Map<number, { x: number; y: number; arg: number; fn: string }[]>();
   readonly tmMoves: number[] = []; // TM01..TM50 then HM01..HM05 -> move id
   /** Spinner (arrow) tiles per map: "x,y" -> where the player ends up after the forced movement. */
@@ -36,6 +37,7 @@ export class Rom {
     this.loadItems();
     this.loadSpecies();
     this.loadTypeChart();
+    this.trainerNames = this.strings(sym('TrainerNames'), 47);
     this.loadMaps();
     this.loadHidden();
     for (let i = 0; i < 55; i++) this.tmMoves.push(this.b[sym('TechnicalMachines') + i]);
@@ -208,10 +210,11 @@ export class Rom {
       for (let n = this.b[o++], i = 0; i < n; i++) {
         const sprite = this.b[o], y = this.b[o + 1] - 4, x = this.b[o + 2] - 4, movement = this.b[o + 3], t = this.b[o + 5];
         let item: number | null = null, trainer = false;
-        if (t & 0x40) { trainer = true; o += 8; }
+        let trainerClass: string | undefined;
+        if (t & 0x40) { trainer = true; const cls = this.b[o + 6] - 200; trainerClass = this.trainerNames[cls - 1]; o += 8; }
         else if (t & 0x80) { item = this.b[o + 6]; o += 7; }
         else o += 6;
-        objects.push({ index: i + 1, sprite, x, y, movement, textId: t & 0x3f, trainer, item });
+        objects.push({ index: i + 1, sprite, x, y, movement, textId: t & 0x3f, trainer, item, trainerClass });
       }
       this.maps.set(id, { id, name: meta.name, tileset, width, height, blocksPtr, bank, connections, warps, signs, objects });
     }
