@@ -64,18 +64,20 @@ async function decideBattle(ctx: Ctx) {
     const [lo, hi] = estimate(me.level, mv.power, phys ? me.atk : me.spc, phys ? foe.def : foe.spc, stab, eff);
     const pct = b.enemy.maxHp ? Math.round((hi / b.enemy.hp) * 100) : 0;
     const koNote = b.kind === 'wild' && catching ? ' — knocks it out, so it can no longer be caught' : '';
-    const dmg = mv.power ? `Estimated damage ${lo}-${hi} HP vs enemy's ${b.enemy.hp} HP left${lo >= b.enemy.hp ? ` (likely KO${koNote})` : pct > 50 ? ' (high damage)' : ''}.` : 'Status move (no direct damage).';
+    const dmg = mv.power ? `Estimated damage ${lo}-${hi} HP vs enemy's ${b.enemy.hp} HP left${lo >= b.enemy.hp ? ` (likely KO${koNote})` : pct > 50 ? ' (high damage)' : ''}.` : `Status move (no direct damage).${(mv.name === 'REFLECT' && (gs.u8('wPlayerBattleStatus3') & 4)) || (mv.name === 'LIGHT SCREEN' && (gs.u8('wPlayerBattleStatus3') & 2)) ? ' Already in effect: using it again does nothing.' : ''}`;
     const key = `Use ${mv.name}`;
-    opts[key] = mv.pp === 0 ? `${mv.name}: 0 PP left, unusable.` : `${mv.name}: ${mv.type} move, power ${mv.power}, accuracy ${mv.accuracy}%, ${mv.pp} PP left. ${effWord(eff)} against ${b.enemy.types.join('/')}. ${stab ? 'Same-type bonus. ' : ''}${dmg}`;
+    const effNote = mv.power ? `${effWord(eff)} against ${b.enemy.types.join('/')}. ${stab ? 'Same-type bonus. ' : ''}` : ''; // type matchups only matter for damaging moves
+    opts[key] = mv.pp === 0 ? `${mv.name}: 0 PP left, unusable.` : `${mv.name}: ${mv.type} move, power ${mv.power}, accuracy ${mv.accuracy}%, ${mv.pp} PP left. ${effNote}${dmg}`;
     actions[key] = () => { if (!select(ctx, 'FIGHT')) return; if (cursorTo(ctx, mv.name)) confirmA(ctx); else tap(ctx, 'B', 20); };
   }
 
   for (const p of party) {
     if (p.slot === b.player.slot || p.hp === 0) continue;
-    const bestEff = Math.max(1, ...p.moves.map((m) => rom.effectiveness(m.type, b.enemy.types)));
+    const attacks = p.moves.filter((m) => m.power > 0);
+    const bestEff = attacks.length ? Math.max(...attacks.map((m) => rom.effectiveness(m.type, b.enemy.types))) : -1;
     const threat = Math.max(...b.enemy.types.map((t) => rom.effectiveness(t, p.types)));
     const key = `Switch to ${p.nickname}`;
-    opts[key] = `Switch to ${p.nickname} (${p.species} Lv${p.level}, ${p.types.join('/')}, HP ${p.hp}/${p.maxHp}). Its best move is ${effWord(bestEff)} vs the enemy; enemy's type is ${effWord(threat)} against it. Switching uses the turn.`;
+    opts[key] = `Switch to ${p.nickname} (${p.species} Lv${p.level}, ${p.types.join('/')}, HP ${p.hp}/${p.maxHp}). ${bestEff < 0 ? 'It has no damaging moves;' : `Its best damaging move is ${effWord(bestEff)} vs the enemy;`} enemy's type is ${effWord(threat)} against it. Switching uses the turn.`;
     actions[key] = () => { if (!select(ctx, 'PKMN')) return; ctx.emu.wait(20); cursorToIndex(ctx, p.slot); confirmA(ctx); if (!select(ctx, 'SWITCH')) tap(ctx, 'B', 20); ctx.emu.wait(20); };
   }
 
