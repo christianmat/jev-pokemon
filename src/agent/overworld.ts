@@ -443,8 +443,10 @@ const INTENTS: Record<string, string> = {
 async function decideIntent(ctx: Ctx): Promise<string> {
   const { gs } = ctx;
   const party = gs.party();
-  const hpBucket = Math.round((10 * party.reduce((a, p) => a + p.hp, 0)) / Math.max(1, party.reduce((a, p) => a + p.maxHp, 0)));
-  const key = `${gs.mapName}|${hpBucket}|${party.map((p) => p.level).join(',')}|${gs.badges}|${currentMilestone(gs).index}|${gs.bag().length}`;
+  // Focus sticks until the situation meaningfully changes (not on every map change, which caused back-and-forth).
+  const hpBucket = Math.floor((4 * party.reduce((a, p) => a + p.hp, 0)) / Math.max(1, party.reduce((a, p) => a + p.maxHp, 0)));
+  const fainted = party.filter((p) => p.hp === 0).length;
+  const key = `${hpBucket}|${fainted}|${party.map((p) => p.level).join(',')}|${gs.badges}|${currentMilestone(gs).index}|${gs.bag().map((i) => i.name).join(',')}|${Math.floor(gs.money / 500)}`;
   if (ctx.mem.intent?.key === key) return ctx.mem.intent.value;
   const balls = gs.bag().filter((i) => /BALL$/.test(i.name)).reduce((a, i) => a + i.qty, 0);
   const criteria = { ...INTENTS };
