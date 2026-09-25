@@ -58,6 +58,7 @@ export class Agent {
       const at = gs.mapName;
       const l = (mem.losses ??= {})[at] ??= { count: 0, team: '' };
       l.count++; l.team = party.map((p) => `${p.species} Lv${p.level}`).join(', ');
+      l.moves = party.flatMap((p) => p.moves.map((m) => m.name)).sort().join(',');
     }
     this.wipedNow = wiped;
     if (this.mode() === 'overworld' && gs.mapId !== this.lastMap) {
