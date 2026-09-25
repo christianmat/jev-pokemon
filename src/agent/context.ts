@@ -27,6 +27,8 @@ export interface Memory {
   pcDone?: boolean;
   /** team+box signature when the PC was last left: the 'team' focus isn't offered again until it changes */
   teamSig?: string;
+  /** whole-team losses by map: how many, and the team (species + levels) at the last one */
+  losses?: Record<string, { count: number; team: string }>;
   /** last BILL's PC mode chosen (WITHDRAW/DEPOSIT/RELEASE), for list facts */
   pcMode?: string;
   bestHops: Record<number, number>; // milestone index -> closest region distance to its objective reached so far // 'MAP:option' -> times it didn't get through // action -> times chosen since the last real progress // cached overworld intent + the situation it was chosen in
@@ -94,6 +96,7 @@ export function situation(ctx: Ctx) {
     }) : undefined,
     // where the player reappears if every Pokémon faints (the last Pokémon Center used); losing also halves money
     returnPointIfAllFaint: `Pokémon Center in ${mapName(gs.u8('wLastBlackoutMap'))}`,
+    lossesSoFar: Object.keys(ctx.mem.losses ?? {}).length ? Object.entries(ctx.mem.losses!).map(([m, l]) => `All Pokémon fainted at ${m} ${l.count} time(s); team at the last one: ${l.team}`) : undefined,
     pokeBalls: gs.bag().filter((i) => /BALL$/.test(i.name)).reduce((a, i) => a + i.qty, 0),
     location: gs.mapName,
     badges: gs.badgeCount,

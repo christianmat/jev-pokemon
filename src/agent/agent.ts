@@ -48,8 +48,18 @@ export class Agent {
   }
 
   /** Progress + milestone bookkeeping, autosave on milestone. */
+  private wipedNow = false;
   private track() {
     const { gs, mem } = this.ctx;
+    // record whole-team losses (every Pokémon fainted in battle): where, and the team's levels then
+    const party = gs.party();
+    const wiped = gs.inBattle !== 0 && party.length > 0 && party.every((p) => p.hp === 0);
+    if (wiped && !this.wipedNow) {
+      const at = gs.mapName;
+      const l = (mem.losses ??= {})[at] ??= { count: 0, team: '' };
+      l.count++; l.team = party.map((p) => `${p.species} Lv${p.level}`).join(', ');
+    }
+    this.wipedNow = wiped;
     if (this.mode() === 'overworld' && gs.mapId !== this.lastMap) {
       this.lastMap = gs.mapId;
       mem.visitedMaps[gs.mapName] = (mem.visitedMaps[gs.mapName] ?? 0) + 1;
