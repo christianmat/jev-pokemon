@@ -108,7 +108,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     if (!path) return;
     const n = used(key);
     const blockedN = mem.blockedExits?.[`${gs.mapName}:${key}`] ?? 0;
-    const blockedNote = blockedN ? ` Tried ${blockedN} time(s) before and did NOT get through (something stopped you / sent you back).` : '';
+    const stopSaid = mem.npcText[`${gs.mapName}:${key}:blocked`];
+    const blockedNote = blockedN ? ` Tried ${blockedN} time(s) before and did NOT get through (something stopped you / sent you back).${stopSaid ? ` What was said when you were stopped: "${clip(stopSaid)}".` : ''}` : '';
     out.push({ key, target, path, desc: `${desc} ${path.length} steps away.${n ? ` Chosen ${n} time(s) already on this visit.` : ''}${blockedNote}` });
   };
 
@@ -637,21 +638,30 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
   ctx.mem.lastInteraction = null;
   const mapBefore = ctx.gs.mapId, mapNameBefore = ctx.gs.mapName;
   const res = await execute(ctx, c, agent);
-  // a battle/dialog cut the walk short (e.g. a trainer spotted us): not a failed attempt, it gets resumed
-  if (res === 'interrupted') { tried[tk(c)] = Math.max(0, (tried[tk(c)] ?? 1) - 1); return; }
+  // a trainer battle cut the walk short: not a failed attempt, it gets resumed
+  const battleInterrupt = () => { tried[tk(c)] = Math.max(0, (tried[tk(c)] ?? 1) - 1); };
   if ((c.target.kind === 'exit' || c.target.kind === 'warp') && c.path.length) {
-    // settle any dialog/cutscene the attempt caused, then check whether we actually left
-    for (let i = 0; i < 400 && (ctx.gs.screen().hasTextBox || (ctx.gs.joyIgnore & 0xf0) || (ctx.gs.u8('wStatusFlags5') & 0x80)); i++) {
-      if (ctx.gs.screen().hasTextBox && !ctx.gs.screen().cursor) tap(ctx, 'A', 8); else ctx.emu.frame();
-    }
+    // settle any dialog/cutscene the attempt caused (keeping what was said), then check whether we actually left
+    const said: string[] = [];
+    const settleTap = () => {
+      const sc = ctx.gs.screen();
+      if (sc.dialog && said[said.length - 1] !== sc.dialog) {
+        if (said.length && sc.dialog.startsWith(said[said.length - 1])) said[said.length - 1] = sc.dialog; else said.push(sc.dialog);
+      }
+      if (sc.hasTextBox && !sc.cursor) tap(ctx, 'A', 8); else ctx.emu.frame();
+    };
+    for (let i = 0; i < 400 && !ctx.gs.inBattle && (ctx.gs.screen().hasTextBox || (ctx.gs.joyIgnore & 0xf0) || (ctx.gs.u8('wStatusFlags5') & 0x80)); i++) settleTap();
     // a trainer's battle can start a moment after its text closes
-    for (let i = 0; i < 300 && ctx.gs.mapId === mapBefore && !ctx.gs.inBattle; i++) {
-      if (ctx.gs.screen().hasTextBox && !ctx.gs.screen().cursor) tap(ctx, 'A', 8); else ctx.emu.frame();
-    }
-    if (ctx.gs.mapId === mapBefore && !ctx.gs.inBattle) {
+    for (let i = 0; i < 300 && ctx.gs.mapId === mapBefore && !ctx.gs.inBattle; i++) settleTap();
+    if (ctx.gs.inBattle) { battleInterrupt(); return; }
+    if (ctx.gs.mapId === mapBefore) {
       const k = `${mapNameBefore}:${c.key}`;
       ctx.mem.blockedExits[k] = (ctx.mem.blockedExits[k] ?? 0) + 1;
-      ctx.log('info', `${c.key}: did not get through (${ctx.mem.blockedExits[k]}x, walk ${res}, at ${ctx.gs.x},${ctx.gs.y})`);
+      if (said.length) ctx.mem.npcText[`${k}:blocked`] = said.join(' ').slice(-1500);
+      pendingTarget = null; // stopped, not merely interrupted: let Jev decide again
+      ctx.log('info', `${c.key}: did not get through (${ctx.mem.blockedExits[k]}x, walk ${res}, at ${ctx.gs.x},${ctx.gs.y})${said.length ? ` — "${said.join(' ').slice(0, 80)}"` : ''}`);
     }
+    return;
   }
+  if (res === 'interrupted') battleInterrupt();
 }
