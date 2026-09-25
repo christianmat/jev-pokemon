@@ -137,7 +137,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
         const without = new Set(blocked); without.delete(`${sp.x},${sp.y}`); without.delete(`${w.x},${w.y}`);
         return !!findPath(g, px, py, (x, y) => x === w.x && y === w.y, { blocked: without, surf });
       });
-      for (const sp of openers) blockers.set(sp.index, `Standing in the only path to the exit to ${mapName(dest)}.`);
+      for (const sp of openers) blockers.set(sp.index, `Standing in the only path to the exit at (${w.x},${w.y}) to ${mapName(dest)}. That exit: ${routeFacts(dest, destRegions)}`);
       const stopAt = open?.[0];
       const person = openers[0];
       const dbgKey = `${gs.mapName}:${w.x},${w.y}`;
