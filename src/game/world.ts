@@ -17,6 +17,7 @@ export interface Grid {
   counter: (x: number, y: number) => boolean;
   ledge: (x: number, y: number, d: Dir) => boolean; // can jump from (x,y) moving d
   pairBlocked: (a: number, b: number) => boolean;
+  spinners?: Map<string, { x: number; y: number }>;
 }
 
 const WATER_TILESETS = new Set([0, 3, 5, 7, 13, 14, 17, 22, 23]);
@@ -62,10 +63,11 @@ export function buildGrid(emu: Emulator, rom: Rom, gs: GameState): Grid {
       return ledges.some((e) => e.dir === d && e.stand === s && e.ledge === l);
     },
     pairBlocked: (a, b) => pairs.some(([p, q]) => (p === a && q === b) || (p === b && q === a)),
+    spinners: rom.spinners.get(gs.mapId),
   };
 }
 
-export interface Step { dir: Dir; x: number; y: number; jump?: boolean }
+export interface Step { dir: Dir; x: number; y: number; jump?: boolean; spin?: boolean }
 
 /**
  * A* over the grid. `blocked` = occupied squares (NPCs). Goal test is a predicate so callers
@@ -75,9 +77,10 @@ export interface Step { dir: Dir; x: number; y: number; jump?: boolean }
 export function findPath(
   g: Grid, sx: number, sy: number,
   goal: (x: number, y: number) => boolean,
-  opts: { blocked?: Set<string>; allowExit?: (x: number, y: number) => boolean; grassCost?: number; surf?: boolean; maxNodes?: number } = {},
+  opts: { blocked?: Set<string>; allowExit?: (x: number, y: number) => boolean; grassCost?: number; surf?: boolean; maxNodes?: number; spinners?: Map<string, { x: number; y: number }> } = {},
 ): Step[] | null {
   const key = (x: number, y: number) => `${x},${y}`;
+  const spin_ = opts.spinners ?? g.spinners;
   const open: { x: number; y: number; f: number; g: number }[] = [{ x: sx, y: sy, f: 0, g: 0 }];
   const came = new Map<string, { from: string; step: Step }>();
   const cost = new Map<string, number>([[key(sx, sy), 0]]);
@@ -111,11 +114,19 @@ export function findPath(
         }
         if (g.pairBlocked(g.tile(cur.x, cur.y), g.tile(nx, ny))) continue;
       }
+      // arrow tiles: stepping on one forces movement to its landing square (chains if it lands on another arrow)
+      let spin = false, extra = 0;
+      for (let hop = 0; hop < 8 && spin_?.has(`${nx},${ny}`); hop++) {
+        const land = spin_.get(`${nx},${ny}`)!;
+        extra += Math.abs(land.x - nx) + Math.abs(land.y - ny);
+        nx = land.x; ny = land.y; spin = true;
+      }
+      if (spin && goal(nx, ny) === false && !g.walkable(nx, ny)) continue;
       const nk = key(nx, ny);
-      const gc = cur.g + (jump ? 2 : 1) + (!outside && g.grass(nx, ny) ? opts.grassCost ?? 0 : 0);
+      const gc = cur.g + (jump ? 2 : 1) + extra + (!outside && g.grass(nx, ny) ? opts.grassCost ?? 0 : 0);
       if (gc < (cost.get(nk) ?? Infinity)) {
         cost.set(nk, gc);
-        came.set(nk, { from: key(cur.x, cur.y), step: { dir: d, x: nx, y: ny, jump } });
+        came.set(nk, { from: key(cur.x, cur.y), step: { dir: d, x: nx, y: ny, jump, spin } });
         open.push({ x: nx, y: ny, g: gc, f: gc });
       }
     }

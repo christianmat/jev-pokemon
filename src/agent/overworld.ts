@@ -228,8 +228,21 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       const sx = b.x - dx, sy = b.y - dy, tx = b.x + dx, ty = b.y + dy;
       if (!g.walkable(sx, sy) || !g.walkable(tx, ty) || blocked.has(`${tx},${ty}`)) continue;
       const path = sx === px && sy === py ? [] : findPath(g, px, py, (x, y) => x === sx && y === sy, { blocked, maxNodes: 6000 });
-      const k = `push${b.x},${b.y}${d}`;
-      add(`Push boulder at (${b.x},${b.y}) ${d}`, `Moves the boulder one square ${d} to (${tx},${ty}).`, { kind: 'push', x: b.x, y: b.y, dir: d }, path);
+      // plain facts about the result of this push (switches/holes are visible floor features in the game)
+      const feature = FLOOR_FEATURES[gs.mapName]?.find((f) => f.x === tx && f.y === ty);
+      const others = new Set([...blocked].filter((k) => k !== `${b.x},${b.y}`));
+      const pushable = (Object.keys(DIRS) as Dir[]).filter((d2) => {
+        const [ex, ey] = DIRS[d2];
+        const k1 = `${tx - ex},${ty - ey}`, k2 = `${tx + ex},${ty + ey}`;
+        return g.walkable(tx - ex, ty - ey) && g.walkable(tx + ex, ty + ey) && !others.has(k1) && !others.has(k2);
+      });
+      const facts = [
+        `Moves the boulder one square ${d} to (${tx},${ty}).`,
+        feature ? `That square is a ${feature.kind === 'switch' ? 'floor switch' : 'hole in the floor'}.` : '',
+        !feature && pushable.length === 0 ? 'After this push the boulder cannot be pushed from any side.' : '',
+        'Boulders go back to their starting spots when you leave this area.',
+      ].filter(Boolean).join(' ');
+      add(`Push boulder at (${b.x},${b.y}) ${d}`, facts, { kind: 'push', x: b.x, y: b.y, dir: d }, path);
     }
   }
 
@@ -303,6 +316,13 @@ function walk(ctx: Ctx, path: Step[]): WalkResult {
     }
     waitWalkDone(ctx);
     if (st.jump) emu.wait(20);
+    if (st.spin) {
+      // arrow tile: the game moves the player for us; wait it out, then make sure we landed as predicted
+      for (let f = 0; f < 600 && ((gs.joyIgnore & 0xf0) || (gs.u8('wStatusFlags5') & 0x80) || emu.mem[sym('wWalkCounter')] !== 0); f++) emu.frame();
+      emu.wait(10);
+      if (gs.x !== st.x || gs.y !== st.y) return 'blocked'; // replan from wherever we are
+      continue;
+    }
     const steps = (ctx.mem.stepsInMap[gs.mapName] ??= new Set());
     steps.add(`${gs.x},${gs.y}`);
     if (gs.mapId !== map0) { settleAfterMapChange(ctx); return 'warped'; }
@@ -400,6 +420,13 @@ export async function execute(ctx: Ctx, c: Candidate, agent: Agent): Promise<voi
       return;
   }
 }
+
+// Floor switches / holes that boulders can be pushed onto (visible in-game; coords from the map scripts).
+const FLOOR_FEATURES: Record<string, { x: number; y: number; kind: 'switch' | 'hole' }[]> = {
+  VICTORY_ROAD_1F: [{ x: 17, y: 13, kind: 'switch' }],
+  VICTORY_ROAD_2F: [{ x: 1, y: 16, kind: 'switch' }, { x: 9, y: 16, kind: 'switch' }],
+  VICTORY_ROAD_3F: [{ x: 3, y: 5, kind: 'switch' }, { x: 23, y: 15, kind: 'hole' }],
+};
 
 const MAX_REPEATS_NO_PROGRESS = +(process.env.MAX_REPEATS_NO_PROGRESS ?? 5);
 

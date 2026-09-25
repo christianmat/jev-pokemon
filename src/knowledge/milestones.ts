@@ -47,11 +47,11 @@ export const MILESTONES: Milestone[] = [
   { id: 'blaine', goal: 'Defeat Blaine at the Cinnabar Island Gym (Fire type; Water and Ground moves are strong).', maps: ['CINNABAR_GYM'], done: badge(6), level: 47 },
   { id: 'giovanni', goal: 'Defeat Giovanni at the Viridian City Gym (Ground type; Water, Grass and Ice moves are strong).', maps: ['VIRIDIAN_GYM'], done: badge(7), level: 50 },
   { id: 'victory_road', goal: 'Go west from Viridian City along Route 22 and north on Route 23 through the badge gates to Victory Road; push boulders onto switches with Strength to reach Indigo Plateau.', maps: ['INDIGO_PLATEAU_LOBBY'], done: (g) => g.event('EVENT_BEAT_LORELEIS_ROOM_TRAINER_0') || indigoReached(g), level: 48 },
-  { id: 'lorelei', goal: 'Elite Four: defeat Lorelei (Ice/Water).', maps: ['LORELEIS_ROOM'], done: ev('EVENT_BEAT_LORELEIS_ROOM_TRAINER_0'), level: 56 },
-  { id: 'bruno', goal: 'Elite Four: defeat Bruno (Fighting/Rock).', maps: ['BRUNOS_ROOM'], done: ev('EVENT_BEAT_BRUNOS_ROOM_TRAINER_0'), level: 58 },
-  { id: 'agatha', goal: 'Elite Four: defeat Agatha (Ghost/Poison).', maps: ['AGATHAS_ROOM'], done: ev('EVENT_BEAT_AGATHAS_ROOM_TRAINER_0'), level: 60 },
-  { id: 'lance', goal: 'Elite Four: defeat Lance (Dragon/Flying).', maps: ['LANCES_ROOM'], done: ev('EVENT_BEAT_LANCE'), level: 62 },
-  { id: 'champion', goal: 'Defeat your rival, the Champion, and enter the Hall of Fame.', maps: ['CHAMPIONS_ROOM'], done: ev('EVENT_BEAT_CHAMPION_RIVAL'), level: 65 },
+  { id: 'lorelei', goal: 'Elite Four: defeat Lorelei (Ice/Water). Inside the Elite Four the battles are back to back: no Pokémon Center until the end, and healing is only possible with items between and during battles.', maps: ['LORELEIS_ROOM'], done: ev('EVENT_BEAT_LORELEIS_ROOM_TRAINER_0'), level: 56 },
+  { id: 'bruno', goal: 'Elite Four: defeat Bruno (Fighting/Rock). Inside the Elite Four the battles are back to back: no Pokémon Center until the end, and healing is only possible with items between and during battles.', maps: ['BRUNOS_ROOM'], done: ev('EVENT_BEAT_BRUNOS_ROOM_TRAINER_0'), level: 58 },
+  { id: 'agatha', goal: 'Elite Four: defeat Agatha (Ghost/Poison). Inside the Elite Four the battles are back to back: no Pokémon Center until the end, and healing is only possible with items between and during battles.', maps: ['AGATHAS_ROOM'], done: ev('EVENT_BEAT_AGATHAS_ROOM_TRAINER_0'), level: 60 },
+  { id: 'lance', goal: 'Elite Four: defeat Lance (Dragon/Flying). Inside the Elite Four the battles are back to back: no Pokémon Center until the end, and healing is only possible with items between and during battles.', maps: ['LANCES_ROOM'], done: ev('EVENT_BEAT_LANCE'), level: 62 },
+  { id: 'champion', goal: 'Defeat your rival, the Champion, and enter the Hall of Fame. This battle directly follows the Elite Four, with no Pokémon Center in between.', maps: ['CHAMPIONS_ROOM'], done: ev('EVENT_BEAT_CHAMPION_RIVAL'), level: 65 },
 ];
 
 // "Reached" milestones are tracked by the agent's visited-map memory.

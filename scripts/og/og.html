@@ -1,0 +1,59 @@
+<!doctype html>
+<html><head><meta charset="utf-8" />
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+<style>
+  :root { --darkest:#0f380f; --dark:#306230; --light:#8bac0f; --lightest:#9bbc0f; --paper:#e0f8d0; --shell:#c4c0bd; --rim:#5b5d6b; --red:#e04848; }
+  * { box-sizing: border-box; margin: 0; }
+  body { width: 1200px; height: 630px; overflow: hidden; background: var(--darkest); font-family: "Press Start 2P", monospace; -webkit-font-smoothing: none;
+    background-image: linear-gradient(rgba(155,188,15,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(155,188,15,.06) 1px, transparent 1px); background-size: 8px 8px;
+    display: flex; align-items: center; padding: 0 64px; gap: 56px; }
+  .left { flex: 1; }
+  .live { display: inline-flex; align-items: center; gap: 14px; color: var(--paper); font-size: 20px; }
+  .live i { width: 16px; height: 16px; background: var(--red); }
+  h1 { margin-top: 30px; font-size: 54px; line-height: 1.45; color: var(--paper); font-weight: 400; text-shadow: 6px 6px 0 var(--dark); }
+  h1 span { color: var(--lightest); }
+  p { margin-top: 26px; color: var(--light); font-size: 19px; line-height: 1.9; }
+  .url { margin-top: 30px; color: var(--paper); font-size: 16px; }
+  .gb { width: 380px; background: var(--shell); padding: 26px 26px 30px; box-shadow: inset -8px -8px 0 #8b8987, inset 8px 8px 0 #dcd9d6; }
+  .rim { background: var(--rim); padding: 18px 20px 22px; }
+  .led { display: flex; align-items: center; gap: 8px; color: #b7b9c8; font-size: 9px; margin-bottom: 12px; }
+  .led b { width: 9px; height: 9px; background: var(--red); display: inline-block; }
+  .screen { background: var(--lightest); height: 250px; padding: 16px 14px; color: var(--darkest); font-size: 11px; line-height: 1.8; }
+  .row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .bar { height: 12px; background: var(--darkest); }
+  .pct { width: 44px; text-align: right; }
+  .opt { flex: 1; }
+  .brand { margin-top: 16px; color: #2f3f86; font-size: 16px; font-style: italic; }
+  .brand b { color: #7d3a5e; font-style: normal; }
+  .pad { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
+  .dpad { width: 72px; height: 72px; position: relative; }
+  .dpad::before, .dpad::after { content: ""; position: absolute; background: #2b2b2e; }
+  .dpad::before { left: 24px; top: 0; width: 24px; height: 72px; }
+  .dpad::after { top: 24px; left: 0; width: 72px; height: 24px; }
+  .ab { display: flex; gap: 14px; transform: rotate(-20deg); }
+  .ab i { width: 36px; height: 36px; background: #9a2257; border-radius: 50%; display: block; }
+</style></head>
+<body>
+  <div class="left">
+    <div class="live"><i></i>LIVE NOW</div>
+    <h1>JEV PLAYS<br /><span>POKéMON RED</span></h1>
+    <p>An AI decision model picks every<br />route, battle move, and catch.</p>
+    <div class="url">JEV-POKEMON.VERCEL.APP</div>
+  </div>
+  <div class="gb">
+    <div class="rim">
+      <div class="led"><b></b>JEV LIVE FEED</div>
+      <div class="screen">
+        JEV IS DECIDING...
+        <div class="row"><span class="pct">82%</span><span class="bar" style="width:120px"></span></div>
+        <div class="row" style="margin-top:4px"><span class="opt">ENTER MT.MOON</span></div>
+        <div class="row"><span class="pct">11%</span><span class="bar" style="width:24px"></span></div>
+        <div class="row" style="margin-top:4px"><span class="opt">HEAL AT CENTER</span></div>
+        <div class="row"><span class="pct"> 7%</span><span class="bar" style="width:14px"></span></div>
+        <div class="row" style="margin-top:4px"><span class="opt">TRAIN IN GRASS</span></div>
+      </div>
+    </div>
+    <div class="brand"><b>JEV</b> BOY</div>
+    <div class="pad"><div class="dpad"></div><div class="ab"><i></i><i></i></div></div>
+  </div>
+</body></html>

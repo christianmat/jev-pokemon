@@ -72,7 +72,9 @@ export class RegionGraph {
     const ids = new Int32Array(g.w * g.h).fill(-1);
     let next = 0;
     const warpSq = new Set(md.warps.map((w) => `${w.x},${w.y}`));
-    const ok = (x: number, y: number) => x >= 0 && y >= 0 && x < g.w && y < g.h && (g.walk(x, y) || warpSq.has(`${x},${y}`));
+    const spinners = this.rom.spinners.get(md.id);
+    // arrow tiles are one-way conveyors: keep them out of the flood fill, link them as directed edges below
+    const ok = (x: number, y: number) => x >= 0 && y >= 0 && x < g.w && y < g.h && !spinners?.has(`${x},${y}`) && (g.walk(x, y) || warpSq.has(`${x},${y}`));
     for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) {
       if (ids[y * g.w + x] !== -1 || !ok(x, y)) continue;
       const q = [[x, y]]; ids[y * g.w + x] = next;
@@ -90,6 +92,17 @@ export class RegionGraph {
       next++;
     }
     this.comp.set(md.id, { w: g.w, h: g.h, ids });
+    // spinners: from any region touching an arrow tile to the region where it lands (following chains)
+    for (const [k, land0] of spinners ?? []) {
+      const [sx, sy] = k.split(',').map(Number);
+      let land = land0;
+      for (let hop = 0; hop < 8 && spinners!.has(`${land.x},${land.y}`); hop++) land = spinners!.get(`${land.x},${land.y}`)!;
+      const to = this.regionAt(md.id, land.x, land.y);
+      for (const [dx, dy] of Object.values(D)) {
+        const from = this.regionAt(md.id, sx + dx, sy + dy);
+        if (from && to && ids[(sy + dy) * g.w + sx + dx] >= 0) this.add(from, to);
+      }
+    }
     // ledge jumps: directed edges
     for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) for (const d of Object.keys(D) as Dir[]) {
       if (!g.ledge(x, y, d)) continue;

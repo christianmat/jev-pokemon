@@ -8,6 +8,10 @@ const PHYSICAL = new Set(['NORMAL', 'FIGHTING', 'FLYING', 'POISON', 'GROUND', 'R
 const HEAL: Record<string, number> = { POTION: 20, 'SUPER POTION': 50, 'HYPER POTION': 200, 'MAX POTION': 999, 'FULL RESTORE': 999, 'FRESH WATER': 50, 'SODA POP': 60, LEMONADE: 80 };
 const BALLS = ['POKé BALL', 'GREAT BALL', 'ULTRA BALL', 'MASTER BALL', 'SAFARI BALL'];
 
+function gs_isSafari(ctx: Ctx) {
+  return ctx.gs.u8('wBattleType') === 2 && !!findLabel(ctx, 'BAIT') && !!findLabel(ctx, 'RUN');
+}
+
 function isMainMenu(ctx: Ctx) {
   const s = ctx.gs.screen();
   return !!s.cursor && !!findLabel(ctx, 'FIGHT') && !!findLabel(ctx, 'RUN');
@@ -84,6 +88,27 @@ async function decideBattle(ctx: Ctx) {
         ctx.emu.wait(20); cursorToIndex(ctx, b.player.slot); confirmA(ctx);
       };
     }
+    // Revive a fainted teammate (they come back but stay benched until switched in)
+    if (/^(REVIVE|MAX REVIVE)$/.test(it.name)) {
+      for (const p of party.filter((pp) => pp.hp === 0)) {
+        const key = `Use ${it.name} on ${p.nickname}`;
+        opts[key] = `Revive fainted ${p.nickname} (${p.species} Lv${p.level}) to ${it.name === 'MAX REVIVE' ? 'full' : 'half'} HP. It stays out of battle until switched in. ${it.qty} left. Uses the turn.`;
+        actions[key] = () => {
+          if (!select(ctx, 'ITEM')) return; if (!cursorTo(ctx, it.name)) { tap(ctx, 'B', 20); return; } confirmA(ctx);
+          ctx.emu.wait(20); cursorToIndex(ctx, p.slot); confirmA(ctx);
+        };
+      }
+    }
+    // Cure the active Pokémon's status
+    const CURES: Record<string, string[]> = { ANTIDOTE: ['POISON'], 'BURN HEAL': ['BURN'], 'ICE HEAL': ['FREEZE'], AWAKENING: ['SLEEP'], 'PARLYZ HEAL': ['PARALYZED'], 'FULL HEAL': ['POISON', 'BURN', 'FREEZE', 'SLEEP', 'PARALYZED'] };
+    if (CURES[it.name]?.includes(b.player.status)) {
+      const key = `Use ${it.name}`;
+      opts[key] = `Cures ${party[b.player.slot]?.nickname ?? 'the active Pokémon'}'s ${b.player.status.toLowerCase()} status. ${it.qty} left. Uses the turn.`;
+      actions[key] = () => {
+        if (!select(ctx, 'ITEM')) return; if (!cursorTo(ctx, it.name)) { tap(ctx, 'B', 20); return; } confirmA(ctx);
+        ctx.emu.wait(20); cursorToIndex(ctx, b.player.slot); confirmA(ctx);
+      };
+    }
     if (/BALL$/.test(it.name) && b.kind === 'wild') {
       const key = `Throw ${it.name}`;
       const dex = [...rom.species.values()].find((sp) => sp.name === b.enemy.species)?.dex ?? 0;
@@ -131,8 +156,32 @@ function menuFacts(ctx: Ctx) {
   };
 }
 
+/** Safari Zone battle menu: BALL / BAIT / THROW ROCK / RUN. Facts come from the game's Safari mechanics. */
+async function decideSafari(ctx: Ctx) {
+  const { gs } = ctx;
+  const b = gs.battle();
+  const balls = gs.u8('wNumSafariBalls');
+  const rate = gs.u8('wEnemyMonActualCatchRate');
+  const dex = [...ctx.rom.species.values()].find((sp) => sp.name === b.enemy.species)?.dex ?? 0;
+  const owned = dex && gs.owned(dex) ? 'You already own this species.' : "NEW species you don't own yet.";
+  const pc = Math.round(100 * catchChance('SAFARI BALL', rate, b.enemy.hp, b.enemy.maxHp, b.enemy.status));
+  const opts: Record<string, string> = {
+    'Throw SAFARI BALL': `Estimated catch chance ~${pc}% with the current catch rate (${rate}/255). ${balls} Safari Balls left. ${owned}`,
+    'Throw BAIT': 'Halves the catch rate, and makes the Pokémon less likely to run away for 1-5 turns.',
+    'Throw ROCK': 'Doubles the catch rate, and makes the Pokémon more likely to run away for 1-5 turns.',
+    'Run away': 'Leave this encounter.',
+  };
+  const labels: Record<string, string> = { 'Throw SAFARI BALL': 'BALL', 'Throw BAIT': 'BAIT', 'Throw ROCK': 'ROCK', 'Run away': 'RUN' };
+  const state = { ...situation(ctx), safari: { wild: `${b.enemy.species} Lv${b.enemy.level} (${b.enemy.types.join('/')})`, safariBalls: balls, catchRate: rate, stepsLeft: (gs.u8('wSafariSteps') << 8) | gs.u8('wSafariSteps', 1) } };
+  const key = await ctx.jev.choose('battle', state, 'You are in a Safari Zone encounter: you cannot fight, only throw Safari Balls, bait or rocks, or run.', opts);
+  remember(ctx.mem.actions, `safari vs ${b.enemy.species}: ${key}`, 12);
+  ctx.log('decision', `safari vs ${b.enemy.species}: ${key}`);
+  select(ctx, labels[key]);
+}
+
 export async function battleStep(ctx: Ctx) {
   const s = ctx.gs.screen();
+  if (s.cursor && gs_isSafari(ctx)) return decideSafari(ctx);
   // nickname keyboard after a catch (game still flags "in battle")
   if (isNamingScreen(ctx)) return dialogStep(ctx);
   if (isMainMenu(ctx)) return decideBattle(ctx);

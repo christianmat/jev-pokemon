@@ -28,6 +28,8 @@ export class Rom {
   readonly maps = new Map<number, MapData>();
   readonly hidden = new Map<number, { x: number; y: number; arg: number; fn: string }[]>();
   readonly tmMoves: number[] = []; // TM01..TM50 then HM01..HM05 -> move id
+  /** Spinner (arrow) tiles per map: "x,y" -> where the player ends up after the forced movement. */
+  readonly spinners = new Map<number, Map<string, { x: number; y: number }>>();
 
   constructor(readonly b: Uint8Array) {
     this.loadMoves();
@@ -37,6 +39,36 @@ export class Rom {
     this.loadMaps();
     this.loadHidden();
     for (let i = 0; i < 55; i++) this.tmMoves.push(this.b[sym('TechnicalMachines') + i]);
+    this.loadSpinners();
+  }
+
+  /**
+   * Arrow-tile movement tables (Rocket Hideout B2F/B3F, Viridian Gym). Each entry: y, x, ptr to an RLE list of
+   * (joypad direction, count) pairs. The game plays simulated joypad states back to front, so the list is reversed.
+   */
+  private loadSpinners() {
+    const tables: [string, string][] = [
+      ['RocketHideout2ArrowTilePlayerMovement', 'ROCKET_HIDEOUT_B2F'],
+      ['RocketHideout3ArrowTilePlayerMovement', 'ROCKET_HIDEOUT_B3F'],
+      ['ViridianGymArrowTilePlayerMovement', 'VIRIDIAN_GYM'],
+    ];
+    const PAD: Record<number, [number, number]> = { 0x10: [1, 0], 0x20: [-1, 0], 0x40: [0, -1], 0x80: [0, 1] };
+    for (const [symName, mapNameStr] of tables) {
+      const mapId = +(Object.entries(MAPS).find(([, v]) => v.name === mapNameStr)?.[0] ?? -1);
+      let a: number;
+      try { a = sym(symName); } catch { continue; }
+      const bank = Math.floor(a / 0x4000);
+      const out = new Map<string, { x: number; y: number }>();
+      for (; this.b[a] !== 0xff; a += 4) {
+        const y = this.b[a], x = this.b[a + 1];
+        const moves: [number, number][] = [];
+        for (let m = this.flat(bank, this.u16(a + 2)); this.b[m] !== 0xff; m += 2) moves.push([this.b[m], this.b[m + 1]]);
+        let px = x, py = y;
+        for (const [pad, n] of moves.reverse()) { const d = PAD[pad]; if (d) { px += d[0] * n; py += d[1] * n; } }
+        out.set(`${x},${y}`, { x: px, y: py });
+      }
+      this.spinners.set(mapId, out);
+    }
   }
 
   /** Move taught by a TM/HM item id (or null). */
