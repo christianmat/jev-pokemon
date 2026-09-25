@@ -31,6 +31,7 @@ export function useFieldMove(ctx: Ctx, slot: number, move: string): boolean {
 
 /** START → ITEM → item → USE. Follow-up prompts (which Pokémon, forget which move...) go through the normal Jev menu loop. */
 export function useItem(ctx: Ctx, item: string): boolean {
+  ctx.mem.lastItem = item;
   if (!openStart(ctx) || !select(ctx, 'ITEM')) { closeMenus(ctx); return false; }
   ctx.emu.wait(20);
   if (!cursorTo(ctx, item)) { closeMenus(ctx); return false; }

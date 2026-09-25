@@ -159,7 +159,10 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   const partyFacts = (label: string) => {
     const p = party.find((pp) => pp.nickname === label);
     if (!p) return '';
-    const able = ableInfo ? (/NOT ABLE/.test(ableRows[p.slot]) ? ' NOT ABLE to use this item (choosing it does nothing).' : ' Able to use this item.') : '';
+    // teaching a TM/HM it already knows does nothing (the game still shows ABLE)
+    const mv = ableInfo && ctx.mem.lastItem ? ctx.rom.machineMove([...ctx.rom.items].find(([, n]) => n === ctx.mem.lastItem)?.[0] ?? -1) : undefined;
+    const knows = mv && p.moves.some((m) => m.name === mv.name);
+    const able = ableInfo ? (/NOT ABLE/.test(ableRows[p.slot]) ? ' NOT ABLE to use this item (choosing it does nothing).' : knows ? ` Already knows ${mv!.name}: choosing it does nothing.` : ' Able to use this item.') : '';
     return `${p.species} Lv${p.level}, ${p.types.join('/')}, HP ${p.hp}/${p.maxHp}${p.hp === 0 ? ' (fainted)' : ''}, moves: ${p.moves.map((m) => m.name).join(', ')}.${able}`;
   };
   const MENU_FACTS: Record<string, string> = {
@@ -253,6 +256,7 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   ctx.jev.explore = prevExplore;
   remember(ctx.mem.actions, `menu[${opts.map((o) => o.text).join('|')}] -> ${choice}`, 12);
   ctx.log('decision', `menu → ${choice}`, { options: opts.map((o) => o.text) });
+  if (/^(TM|HM)\d\d$/.test(choice)) ctx.mem.lastItem = choice;
   // BILL's PC bookkeeping: which list we're in, and when the PC is left
   const pcMode = choice.match(/^(WITHDRAW|DEPOSIT|RELEASE)/)?.[1];
   if (pcMode && opts.some((o) => /^SEE YA/.test(o.text))) ctx.mem.pcMode = pcMode;
