@@ -1,0 +1,16 @@
+import fs from 'node:fs';
+import { Emulator } from '../../src/emu/emulator.js';
+import { Rom } from '../../src/game/rom.js';
+import { GameState } from '../../src/game/state.js';
+import { RegionGraph } from '../../src/game/regions.js';
+import { Jev } from '../../src/jev/client.js';
+import { Agent } from '../../src/agent/agent.js';
+import { newMemory } from '../../src/agent/context.js';
+import { buildCandidates } from '../../src/agent/overworld.js';
+const romBuf = fs.readFileSync('roms/red.gb');
+const emu = new Emulator(romBuf), rom = new Rom(romBuf), gs = new GameState(emu, rom);
+const ctx: any = { emu, rom, gs, jev: new Jev({ logFile: '/dev/null' }), regions: new RegionGraph(rom), mem: newMemory(), log: () => {} };
+const agent = new Agent(ctx); agent.load(process.argv[2] ?? 'resume-here');
+for (let i = 0; i < 200 && agent.mode() !== 'overworld'; i++) emu.wait(10);
+console.log(gs.mapName, gs.x, gs.y);
+for (const c of buildCandidates(ctx)) if (/Enter|exit/.test(c.key)) console.log(' -', c.key, '|', c.desc.slice(0, 150));

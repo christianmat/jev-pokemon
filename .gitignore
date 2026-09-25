@@ -1,0 +1,12 @@
+node_modules/
+roms/
+saves/
+logs/
+vendor/
+.env
+.env.*
+!.env.example
+.DS_Store
+# derived from the pret/pokered disassembly at setup time (not redistributed)
+src/data/generated.json
+.vercel

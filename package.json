@@ -1,0 +1,29 @@
+{
+  "name": "jevpokemon",
+  "version": "1.0.0",
+  "description": "Jev (TypeSafe AI decision model) plays Pokémon Red. Bring your own ROM.",
+  "scripts": {
+    "gen": "tsx scripts/gen-data.ts",
+    "setup": "bash scripts/setup.sh",
+    "start": "tsx src/server/main.ts",
+    "headless": "tsx src/server/main.ts --headless",
+    "resume": "tsx src/server/main.ts --resume",
+    "typecheck": "tsc"
+  },
+  "keywords": [],
+  "author": "Christian Mathiesen",
+  "license": "GPL-2.0-or-later",
+  "dependencies": {
+    "ai": "^7.0.113",
+    "serverboy": "^0.0.7",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "type": "module",
+  "private": true
+}

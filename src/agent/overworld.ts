@@ -1,0 +1,509 @@
+import type { Ctx } from './context.js';
+import { tap, situation, regionGraph } from './context.js';
+import type { Agent } from './agent.js';
+import { buildGrid, findPath, DIRS, type Dir, type Grid, type Step } from '../game/world.js';
+import { sym, mapName } from '../game/symbols.js';
+import gen from '../data/generated.json' with { type: 'json' };
+import { currentMilestone } from '../knowledge/milestones.js';
+import { useFieldMove, useItem, slotWithMove, closeMenus } from './field.js';
+import { capabilities } from './context.js';
+
+const SPRITES = (gen as any).sprites as Record<string, string>;
+
+type Target =
+  | { kind: 'warp'; x: number; y: number; dest: number }
+  | { kind: 'hidden'; x: number; y: number; face: number | null }
+  | { kind: 'cut'; x: number; y: number }
+  | { kind: 'surf'; x: number; y: number }
+  | { kind: 'strength' }
+  | { kind: 'push'; x: number; y: number; dir: Dir }
+  | { kind: 'item'; name: string }
+  | { kind: 'exit'; dir: Dir; dest: number }
+  | { kind: 'npc'; index: number; x: number; y: number; sprite: string }
+  | { kind: 'sign'; x: number; y: number }
+  | { kind: 'grass' }
+  | { kind: 'explore' };
+
+interface Candidate { key: string; desc: string; target: Target; path: Step[] }
+
+const adj = (x: number, y: number, tx: number, ty: number) => Math.abs(x - tx) + Math.abs(y - ty) === 1;
+
+function blockedSquares(ctx: Ctx, exceptIndex = -1): Set<string> {
+  const s = new Set<string>();
+  for (const sp of ctx.gs.sprites()) if (!sp.hidden && sp.index !== exceptIndex) s.add(`${sp.x},${sp.y}`);
+  return s;
+}
+
+/** Squares from which the player can interact with (tx,ty): adjacent, or across a counter. */
+function interactGoal(g: Grid, tx: number, ty: number) {
+  return (x: number, y: number) => {
+    if (adj(x, y, tx, ty)) return true;
+    for (const [dx, dy] of Object.values(DIRS)) if (x + 2 * dx === tx && y + 2 * dy === ty && g.counter(x + dx, y + dy)) return true;
+    return false;
+  };
+}
+
+export function buildCandidates(ctx: Ctx): Candidate[] {
+  const { gs, rom, mem } = ctx;
+  const rg = regionGraph(ctx);
+  const g = buildGrid(ctx.emu, rom, gs);
+  const md = rom.maps.get(gs.mapId);
+  const px = gs.x, py = gs.y;
+  // NPCs block, and so do warp tiles (doors/ladders): stepping on one mid-path would warp us away by accident
+  const warpSquares = new Set((md?.warps ?? []).map((w) => `${w.x},${w.y}`));
+  const blocked = new Set([...blockedSquares(ctx), ...warpSquares]);
+  const surf = gs.walkState === 2;
+  const { m } = currentMilestone(gs);
+  const objMaps = (m?.maps ?? []).map((n) => Object.entries((gen as any).maps).find(([, v]: any) => v.name === n)?.[0]).filter(Boolean).map(Number);
+  const dist = rg.distancesTo(objMaps.flatMap((id) => rg.regionsOf(id)));
+  const hereRegion = rg.regionAt(gs.mapId, px, py);
+  const hereHops = objMaps.includes(gs.mapId) ? 0 : (hereRegion ? dist.get(hereRegion) : undefined) ?? Infinity;
+  // Getting closer to the objective counts as progress (mazes need back-and-forth without new maps)
+  const mi = currentMilestone(gs).index;
+  if (isFinite(hereHops) && hereHops < (mem.bestHops[mi] ?? Infinity)) {
+    mem.bestHops[mi] = hereHops;
+    mem.triedNoProgress = {};
+  }
+  const used = (k: string) => mem.usedTargets[`${gs.mapName}:${k}`] ?? 0;
+
+  const routeFacts = (dest: number, destRegions: string[]) => {
+    if (objMaps.includes(dest)) return 'The objective is in this place (completes objective location).';
+    if (hereHops === 0) return `Leaves the current area (the objective takes place in this area, ${gs.mapName}).`;
+    const h = Math.min(Infinity, ...destRegions.map((r) => dist.get(r) ?? Infinity));
+    if (!isFinite(h)) return isFinite(hereHops) ? 'Does not lead toward the objective (dead end for now).' : '';
+    if (h < hereHops) return `Leads toward the objective (${h} area(s) away from it).`;
+    if (h > hereHops) return `Leads away from the objective (${h} areas away).`;
+    return `Same distance from the objective (${h} areas).`;
+  };
+  // distances to services (nearest Pokémon Center / Mart), for healing and shopping intents
+  const serviceDist = (re: RegExp) => rg.distancesTo(Object.entries((gen as any).maps).filter(([, v]: any) => re.test(v.name)).flatMap(([id]) => rg.regionsOf(+id)));
+  const pcDist = serviceDist(/POKECENTER/), martDist = serviceDist(/_MART$/);
+  const hereReg = hereRegion ? [hereRegion] : [];
+  const svc = (regions: string[]) => {
+    const f = (d: Map<string, number>, label: string) => {
+      const here = Math.min(Infinity, ...hereReg.map((r) => d.get(r) ?? Infinity));
+      const there = Math.min(Infinity, ...regions.map((r) => d.get(r) ?? Infinity));
+      if (!isFinite(there) || !isFinite(here) || there >= here) return '';
+      return there === 0 ? ` Is a ${label}.` : ` Toward the nearest ${label} (${there} areas).`;
+    };
+    return f(pcDist, 'Pokémon Center') + f(martDist, 'Poké Mart');
+  };
+  const visitFacts = (dest: number) => {
+    const n = mem.visitedMaps[mapName(dest)] ?? 0;
+    return n ? `Visited ${n} time(s) before.` : 'Unvisited place.';
+  };
+
+  const out: Candidate[] = [];
+  const add = (key: string, desc: string, target: Target, path: Step[] | null) => {
+    if (!path) return;
+    const n = used(key);
+    const blockedN = mem.blockedExits?.[`${gs.mapName}:${key}`] ?? 0;
+    const blockedNote = blockedN ? ` Tried ${blockedN} time(s) before and did NOT get through (something stopped you / sent you back).` : '';
+    out.push({ key, target, path, desc: `${desc} ${path.length} steps away.${n ? ` Chosen ${n} time(s) already on this visit.` : ''}${blockedNote}` });
+  };
+
+  // Warps (dedupe adjacent warps with the same destination)
+  const seenWarp = new Map<string, Candidate>();
+  const lastMap = gs.u8('wLastMap');
+  (md?.warps ?? []).forEach((w, wi) => {
+    // LAST_MAP warps: resolve from the ROM (which map warps into this door), not from wLastMap
+    let destRegions = md ? rg.warpTargets(md, wi) : [];
+    if (w.destMap === 0xff && destRegions.length > 1) {
+      const pref = destRegions.filter((r) => r.startsWith(`${lastMap}:`));
+      if (pref.length) destRegions = pref;
+    }
+    const dest = w.destMap !== 0xff ? w.destMap : destRegions.length ? +destRegions[0].split(':')[0] : lastMap;
+    const k = `${dest}|${destRegions.join(',')}`;
+    const blockedExceptThis = new Set(blocked); blockedExceptThis.delete(`${w.x},${w.y}`);
+    const path = px === w.x && py === w.y ? [] : findPath(g, px, py, (x, y) => x === w.x && y === w.y, { blocked: blockedExceptThis, surf });
+    // merge doors that lead to the same place — but only reachable ones, keeping the nearest
+    if (!path) return;
+    const prev = seenWarp.get(k);
+    if (prev && prev.path.length <= path.length) return;
+    if (prev) out.splice(out.indexOf(prev), 1);
+    const name = mapName(dest);
+    const heal = /POKECENTER/.test(name) ? ' A Pokémon Center: the nurse heals the whole party for free.' : /MART/.test(name) ? ' A Poké Mart: buy items.' : /GYM/.test(name) ? ' A Pokémon Gym.' : '';
+    add(`Enter ${name}`, `Door/stairs/ladder at (${w.x},${w.y}) leading to ${name}.${heal} ${routeFacts(dest, destRegions)}${svc(destRegions)} ${visitFacts(dest)}`, { kind: 'warp', x: w.x, y: w.y, dest }, path);
+    seenWarp.set(k, out[out.length - 1]);
+  });
+
+  // Map-edge connections
+  for (const c of md?.connections ?? []) {
+    const dir: Dir = c.dir === 'north' ? 'up' : c.dir === 'south' ? 'down' : c.dir === 'west' ? 'left' : 'right';
+    const allowExit = (x: number, y: number) =>
+      (dir === 'up' && y === -1) || (dir === 'down' && y === g.h) || (dir === 'left' && x === -1) || (dir === 'right' && x === g.w);
+    const name = mapName(c.map);
+    // only offer edge exits that land on a walkable square of the next map (not water/cliffs)
+    const landsOk = (x: number, y: number) => {
+      const ix = Math.min(Math.max(x, 0), g.w - 1), iy = Math.min(Math.max(y, 0), g.h - 1);
+      return !!md && !!rg.connectionTarget(md, c, ix, iy);
+    };
+    const exitGoal = (x: number, y: number) => allowExit(x, y) && landsOk(x, y);
+    const path2 = findPath(g, px, py, exitGoal, { blocked, allowExit: exitGoal, grassCost: 1, surf });
+    const inside = path2 && path2.length ? (path2.length > 1 ? path2[path2.length - 2] : { x: px, y: py }) : null;
+    const destRegion = inside && md ? rg.connectionTarget(md, c, inside.x, inside.y) : null;
+    add(`Go ${c.dir} to ${name}`, `Walk off the ${c.dir} edge of the map into ${name}. ${routeFacts(c.map, destRegion ? [destRegion] : [])}${svc(destRegion ? [destRegion] : [])} ${visitFacts(c.map)}`, { kind: 'exit', dir, dest: c.map }, path2);
+  }
+
+  // NPCs / objects
+  for (const sp of gs.sprites()) {
+    if (sp.hidden) continue;
+    const spriteName = SPRITES[sp.picture] ?? `SPRITE_${sp.picture}`;
+    const obj = md?.objects[sp.index - 1];
+    const ig = interactGoal(g, sp.x, sp.y);
+    const path = ig(px, py) ? [] : findPath(g, px, py, ig, { blocked, maxNodes: 6000 });
+    const k = `${gs.mapName}:npc${sp.index}`;
+    const said = mem.npcText[k];
+    const kind = obj?.item != null ? `an item ball (${rom.items.get(obj.item) ?? 'item'})` : spriteName === 'POKE_BALL' ? 'a Poké Ball object' : obj?.trainer ? `a trainer (${spriteName})` : `a person (${spriteName})`;
+    const facts = `${kind} at (${sp.x},${sp.y}).${said ? ` Last time they said: "${said.slice(0, 300)}".` : ' Not yet talked to.'}${spriteName === 'NURSE' ? ' Heals the whole party.' : ''}${spriteName === 'CLERK' ? ' Shop clerk: buy items.' : ''}`;
+    const label = obj?.item != null ? `Pick up item ball at (${sp.x},${sp.y})` : `Talk to ${spriteName} at (${sp.x},${sp.y})`;
+    add(label, facts, { kind: 'npc', index: sp.index, x: sp.x, y: sp.y, sprite: spriteName }, path);
+  }
+
+  // Signs
+  for (const sg of md?.signs ?? []) {
+    const sgGoal = interactGoal(g, sg.x, sg.y);
+    const path = sgGoal(px, py) ? [] : findPath(g, px, py, sgGoal, { blocked, maxNodes: 6000 });
+    const k = `${gs.mapName}:sign${sg.x},${sg.y}`;
+    const said = mem.npcText[k];
+    add(`Read sign at (${sg.x},${sg.y})`, said ? `A sign. It says: "${said.slice(0, 300)}".` : 'A sign, not yet read.', { kind: 'sign', x: sg.x, y: sg.y }, path);
+  }
+
+  // Hidden interactables (PCs, switches, statues, trash cans...). Hidden items are excluded: a human wouldn't know them.
+  const HIDDEN_LABEL: [RegExp, string][] = [[/PokemonCenterPC|RedsPC|BillsHousePC/, 'Use the PC'], [/Switches/, 'Press the switch'], [/GymTrash/, 'Search the trash can'], [/GymStatues/, 'Read the gym statue'], [/CinnabarQuiz/, 'Use the quiz machine'], [/Fossil/, 'Examine the fossil'], [/Binoculars/, 'Look through binoculars']];
+  for (const h of rom.hidden.get(gs.mapId) ?? []) {
+    if (/HiddenItems|HiddenCoins|StartSlotMachine|CableClub/.test(h.fn)) continue;
+    const face = [0, 4, 8, 0xc].includes(h.arg) && /PC|Switches|Quiz/.test(h.fn) ? h.arg : null;
+    const standOk = (x: number, y: number) => {
+      if (face === null) return adj(x, y, h.x, h.y);
+      const [dx, dy] = face === 4 ? [0, 1] : face === 0 ? [0, -1] : face === 8 ? [1, 0] : [-1, 0];
+      return x === h.x + dx && y === h.y + dy;
+    };
+    const path = standOk(px, py) ? [] : findPath(g, px, py, standOk, { blocked, maxNodes: 6000 });
+    const label = HIDDEN_LABEL.find(([re]) => re.test(h.fn))?.[1] ?? `Examine ${h.fn.replace(/^(Print|Display)/, '').replace(/Text$/, '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()}`;
+    const k = `${gs.mapName}:hidden${h.x},${h.y}`;
+    const said = mem.npcText[k];
+    add(`${label} at (${h.x},${h.y})`, said ? `Examined before: "${said.slice(0, 120)}".` : 'Not examined yet.', { kind: 'hidden', x: h.x, y: h.y, face }, path);
+  }
+
+  // Field moves (only when the party can really use them)
+  const caps = capabilities(ctx);
+  const surfing = gs.walkState === 2;
+  if (caps.cut) {
+    for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) {
+      if (!g.cuttable(x, y)) continue;
+      const goal = (sx: number, sy: number) => adj(sx, sy, x, y);
+      const path = goal(px, py) ? [] : findPath(g, px, py, goal, { blocked, maxNodes: 4000 });
+      const r = rg.regionAt(gs.mapId, x, y);
+      add(`Use CUT on the tree at (${x},${y})`, `A small tree that can be cut down with CUT. ${routeFacts(gs.mapId, r ? [r] : [])}`, { kind: 'cut', x, y }, path);
+    }
+  }
+  if (caps.surf && !surfing) {
+    const seenRegions = new Set<string>();
+    for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) {
+      if (!g.water(x, y)) continue;
+      const r = rg.regionAt(gs.mapId, x, y) ?? `${x},${y}`;
+      if (seenRegions.has(r)) continue;
+      const goal = (sx: number, sy: number) => adj(sx, sy, x, y) && g.walkable(sx, sy);
+      const path = goal(px, py) ? [] : findPath(g, px, py, goal, { blocked, maxNodes: 6000 });
+      if (!path) continue;
+      seenRegions.add(r);
+      add(`SURF onto the water at (${x},${y})`, `Start surfing on this water. ${routeFacts(gs.mapId, [r])}`, { kind: 'surf', x, y }, path);
+    }
+  }
+  const boulders = gs.sprites().filter((s) => !s.hidden && SPRITES[s.picture] === 'BOULDER');
+  if (boulders.length && slotWithMove(ctx, 'STRENGTH') >= 0 && gs.badges & 0x08) {
+    if (!(gs.u8('wStatusFlags1') & 1)) add('Activate STRENGTH', 'Lets the player push boulders on this map.', { kind: 'strength' }, []);
+    else for (const b of boulders) for (const d of Object.keys(DIRS) as Dir[]) {
+      const [dx, dy] = DIRS[d];
+      const sx = b.x - dx, sy = b.y - dy, tx = b.x + dx, ty = b.y + dy;
+      if (!g.walkable(sx, sy) || !g.walkable(tx, ty) || blocked.has(`${tx},${ty}`)) continue;
+      const path = sx === px && sy === py ? [] : findPath(g, px, py, (x, y) => x === sx && y === sy, { blocked, maxNodes: 6000 });
+      const k = `push${b.x},${b.y}${d}`;
+      add(`Push boulder at (${b.x},${b.y}) ${d}`, `Moves the boulder one square ${d} to (${tx},${ty}).`, { kind: 'push', x: b.x, y: b.y, dir: d }, path);
+    }
+  }
+
+  // Bag items usable in the field (teach TM/HM, heal, evolve, flute, bike...)
+  const party = gs.party();
+  const injured = party.some((p) => p.hp < p.maxHp);
+  for (const it of gs.bag()) {
+    const mv = rom.machineMove(it.id);
+    let desc = '';
+    if (mv) {
+      const knows = party.filter((p) => p.moves.some((m) => m.name === mv.name)).map((p) => p.nickname);
+      if (knows.length === party.length) continue;
+      desc = `Teach ${mv.name} (${mv.type}, power ${mv.power}, accuracy ${mv.accuracy}%) to a party Pokémon.${knows.length ? ` Already known by ${knows.join(', ')}.` : ''}${/^HM/.test(it.name) ? ' HM moves enable field abilities (CUT, SURF, STRENGTH...).' : ''}`;
+    } else if (/POTION|FRESH WATER|SODA POP|LEMONADE|FULL RESTORE|REVIVE|ANTIDOTE|PARLYZ HEAL|AWAKENING|BURN HEAL|ICE HEAL|FULL HEAL/.test(it.name)) {
+      if (!injured && !/REVIVE/.test(it.name) && !party.some((p) => p.status !== 'OK')) continue;
+      desc = `Use on a Pokémon (heal / cure). ${it.qty} left.`;
+    } else if (/STONE$/.test(it.name)) desc = 'Evolution stone: evolves certain Pokémon.';
+    else if (/RARE CANDY/.test(it.name)) desc = 'Raises a Pokémon by one level.';
+    else if (/POKé FLUTE/.test(it.name)) desc = 'Plays a tune that wakes up sleeping Pokémon (like a Snorlax blocking a road).';
+    else if (/BICYCLE/.test(it.name)) desc = surfing ? '' : 'Ride the bicycle (faster travel).';
+    else if (/ESCAPE ROPE/.test(it.name)) desc = 'Escape from a cave/dungeon back to the last Pokémon Center.';
+    if (!desc) continue;
+    add(`Use ${it.name} from the bag`, desc, { kind: 'item', name: it.name }, []);
+  }
+
+  // Tall grass (wild encounters: train / catch)
+  const gp = findPath(g, px, py, (x, y) => g.grass(x, y), { blocked, maxNodes: 8000 });
+  if (gp) add('Walk in tall grass', 'Wander in tall grass to find wild Pokémon (gain experience / catch new team members).', { kind: 'grass' }, gp);
+
+  // Explore unseen squares
+  const seenSq = mem.stepsInMap[gs.mapName] ?? new Set();
+  const ep = findPath(g, px, py, (x, y) => !seenSq.has(`${x},${y}`) && Math.abs(x - px) + Math.abs(y - py) >= 6, { blocked, maxNodes: 8000 });
+  if (ep) add('Explore this area', `Walk to a part of ${gs.mapName} not yet explored.`, { kind: 'explore' }, ep);
+
+  // Distinct options must have distinct names (e.g. several ladders to the same floor lead to different areas)
+  const counts = new Map<string, number>();
+  for (const c of out) counts.set(c.key, (counts.get(c.key) ?? 0) + 1);
+  for (const c of out) {
+    if ((counts.get(c.key) ?? 0) < 2) continue;
+    const t = c.target as { x?: number; y?: number };
+    if (t.x !== undefined) c.key = c.key.replace(/^Enter /, `Take the exit at (${t.x},${t.y}) to `);
+  }
+  return out;
+}
+
+type WalkResult = 'ok' | 'blocked' | 'interrupted' | 'warped';
+
+function waitWalkDone(ctx: Ctx) {
+  for (let i = 0; i < 30 && ctx.emu.mem[sym('wWalkCounter')] !== 0; i++) ctx.emu.frame();
+}
+
+/** Execute path steps. Stops on map change, text box, battle, or blockage. */
+function walk(ctx: Ctx, path: Step[]): WalkResult {
+  const { gs, emu } = ctx;
+  const map0 = gs.mapId;
+  for (const st of path) {
+    const x0 = gs.x, y0 = gs.y;
+    const btn = st.dir.toUpperCase() as 'UP';
+    let moved = false;
+    // first press may only turn the player; allow a second attempt
+    for (let f = 0; f < 40; f++) {
+      emu.frame([btn]);
+      if (gs.x !== x0 || gs.y !== y0 || gs.mapId !== map0) { moved = true; break; }
+      if (gs.inBattle || gs.screen().hasTextBox) break;
+    }
+    waitWalkDone(ctx);
+    if (st.jump) emu.wait(20);
+    const steps = (ctx.mem.stepsInMap[gs.mapName] ??= new Set());
+    steps.add(`${gs.x},${gs.y}`);
+    if (gs.mapId !== map0) { settleAfterMapChange(ctx); return 'warped'; }
+    if (gs.inBattle || gs.screen().hasTextBox) return 'interrupted';
+    if (!moved) return 'blocked';
+  }
+  return 'ok';
+}
+
+function face(ctx: Ctx, tx: number, ty: number) {
+  const dx = Math.sign(tx - ctx.gs.x), dy = Math.sign(ty - ctx.gs.y);
+  const d = dx > 0 ? 'RIGHT' : dx < 0 ? 'LEFT' : dy > 0 ? 'DOWN' : 'UP';
+  ctx.emu.press(d, 3, 6);
+}
+
+export async function execute(ctx: Ctx, c: Candidate, agent: Agent): Promise<void> {
+  const { gs, emu } = ctx;
+  const t = c.target;
+  let res = walk(ctx, c.path);
+  if (res === 'blocked') {
+    // someone stepped in the way — replan once to the same target
+    emu.wait(20);
+    const again = buildCandidates(ctx).find((k) => k.key === c.key);
+    if (again) res = walk(ctx, again.path);
+  }
+  if (res !== 'ok') return;
+  switch (t.kind) {
+    case 'warp': {
+      emu.wait(20);
+      // carpet/edge warps need a push toward the edge
+      const map0 = gs.mapId;
+      const last = c.path[c.path.length - 1]?.dir;
+      for (const d of [last, 'down', 'up', 'left', 'right'].filter(Boolean) as Dir[]) {
+        emu.hold(d.toUpperCase() as 'UP', 16);
+        emu.wait(20);
+        if (gs.mapId !== map0 || gs.screen().hasTextBox) break;
+      }
+      return;
+    }
+    case 'npc': {
+      const sp = gs.sprites().find((s) => s.index === t.index);
+      const tx = sp?.x ?? t.x, ty = sp?.y ?? t.y;
+      ctx.mem.lastInteraction = `${gs.mapName}:npc${t.index}`;
+      ctx.mem.talked[ctx.mem.lastInteraction] = (ctx.mem.talked[ctx.mem.lastInteraction] ?? 0) + 1;
+      face(ctx, tx, ty);
+      tap(ctx, 'A', 20);
+      return;
+    }
+    case 'sign': {
+      ctx.mem.lastInteraction = `${gs.mapName}:sign${t.x},${t.y}`;
+      face(ctx, t.x, t.y);
+      tap(ctx, 'A', 20);
+      return;
+    }
+    case 'hidden': {
+      ctx.mem.lastInteraction = `${gs.mapName}:hidden${t.x},${t.y}`;
+      face(ctx, t.x, t.y);
+      tap(ctx, 'A', 20);
+      return;
+    }
+    case 'cut': {
+      face(ctx, t.x, t.y);
+      useFieldMove(ctx, slotWithMove(ctx, 'CUT'), 'CUT');
+      return;
+    }
+    case 'surf': {
+      face(ctx, t.x, t.y);
+      useFieldMove(ctx, slotWithMove(ctx, 'SURF'), 'SURF');
+      return;
+    }
+    case 'strength': {
+      useFieldMove(ctx, slotWithMove(ctx, 'STRENGTH'), 'STRENGTH');
+      return;
+    }
+    case 'push': {
+      emu.hold(t.dir.toUpperCase() as 'UP', 60);
+      emu.wait(30);
+      return;
+    }
+    case 'item': {
+      if (!useItem(ctx, t.name)) closeMenus(ctx);
+      return;
+    }
+    case 'grass': {
+      // pace inside the grass until something happens
+      const g = buildGrid(ctx.emu, ctx.rom, gs);
+      for (let i = 0; i < 40 && !gs.inBattle && !gs.screen().hasTextBox; i++) {
+        const opts = (Object.keys(DIRS) as Dir[]).filter((d) => { const [dx, dy] = DIRS[d]; return g.grass(gs.x + dx, gs.y + dy); });
+        if (!opts.length) break;
+        walk(ctx, [{ dir: opts[Math.floor(Math.random() * opts.length)], x: 0, y: 0 }]);
+      }
+      return;
+    }
+    default:
+      return;
+  }
+}
+
+const MAX_REPEATS_NO_PROGRESS = +(process.env.MAX_REPEATS_NO_PROGRESS ?? 5);
+
+const INTENTS: Record<string, string> = {
+  progress: 'Move toward the current objective now.',
+  heal: 'Go heal the party at a Pokémon Center first (HP low or Pokémon fainted).',
+  train: 'Train: fight wild Pokémon in tall grass to gain levels before the objective.',
+  catch: 'Catch new wild Pokémon to build a stronger, more varied team.',
+  shop: 'Buy supplies (Poké Balls, Potions) at a Poké Mart.',
+  explore: 'Talk to people / explore this area for items or information.',
+};
+
+/** High-level intent, re-decided only when the situation changes (keeps Jev calls low). */
+async function decideIntent(ctx: Ctx): Promise<string> {
+  const { gs } = ctx;
+  const party = gs.party();
+  const hpBucket = Math.round((10 * party.reduce((a, p) => a + p.hp, 0)) / Math.max(1, party.reduce((a, p) => a + p.maxHp, 0)));
+  const key = `${gs.mapName}|${hpBucket}|${party.map((p) => p.level).join(',')}|${gs.badges}|${currentMilestone(gs).index}|${gs.bag().length}`;
+  if (ctx.mem.intent?.key === key) return ctx.mem.intent.value;
+  const balls = gs.bag().filter((i) => /BALL$/.test(i.name)).reduce((a, i) => a + i.qty, 0);
+  const criteria = { ...INTENTS };
+  criteria.catch = `${INTENTS.catch} Your team has ${party.length} Pokémon${party.length === 1 ? ' — if it faints you lose the battle, and there are no type options to switch to' : ''}. You have ${balls} Poké Ball(s)${balls ? '' : ' (buy some first)'}.`;
+  const { picked } = await ctx.jev.ask('intent', situation(ctx), {
+    intent: { type: 'choice', instructions: 'You are playing Pokémon Red. Given the objective, the party\'s health and levels (vs the typical opponent level of the objective), money and items, what should the player focus on right now?', criteria },
+  });
+  const value = picked.intent as string;
+  ctx.mem.intent = { value, key };
+  ctx.log('decision', `intent → ${value}`);
+  return value;
+}
+
+/** After a warp, wait until the new map is fully loaded (map id, position and sprites stable, input enabled). */
+function settleAfterMapChange(ctx: Ctx) {
+  const { gs, emu } = ctx;
+  let last = '', stable = 0;
+  for (let f = 0; f < 300 && stable < 20; f++) {
+    const snap = `${gs.mapId}|${gs.x},${gs.y}|${gs.joyIgnore}|${gs.sprites().map((s) => `${s.x},${s.y},${s.hidden}`).join(';')}`;
+    stable = snap === last && gs.joyIgnore === 0 ? stable + 1 : 0;
+    last = snap;
+    emu.frame();
+  }
+}
+
+let lastDecisionMap = -1;
+
+export async function overworldStep(ctx: Ctx, agent: Agent) {
+  if (ctx.gs.mapId !== lastDecisionMap) {
+    settleAfterMapChange(ctx);
+    lastDecisionMap = ctx.gs.mapId;
+    if (agent.mode() !== 'overworld') return; // a script/dialog started while arriving
+  }
+  const intent = await decideIntent(ctx);
+  const cands = buildCandidates(ctx);
+  if (!cands.length) {
+    ctx.log('warn', 'no reachable targets; waiting');
+    tap(ctx, 'B', 30);
+    return;
+  }
+  // Loop rule: tag options already tried without progress; drop ones repeated too often (until progress resets it)
+  const tried = ctx.mem.triedNoProgress;
+  const tk = (c: Candidate) => `${ctx.gs.mapName}:${c.key}`;
+  const towardObjective = (c: Candidate) => /Leads toward the objective|objective is in this place/.test(c.desc);
+  let pool = cands.filter((c) => towardObjective(c) || (tried[tk(c)] ?? 0) < MAX_REPEATS_NO_PROGRESS);
+  if (!pool.length) { ctx.mem.triedNoProgress = {}; pool = cands; }
+  const criteria: Record<string, string> = {};
+  const FOCUS: Record<string, RegExp> = {
+    heal: /Pokémon Center|heals the whole party|NURSE/,
+    shop: /Poké Mart|Shop clerk|CLERK/,
+    train: /tall grass/,
+    catch: /tall grass/,
+    progress: /toward the objective|objective is in this place|objective takes place/i,
+  };
+  for (const c of pool) {
+    const n = tried[tk(c)] ?? 0;
+    const fits = FOCUS[intent]?.test(`${c.key} ${c.desc}`) ? ' Matches your current focus.' : '';
+    criteria[c.key] = c.desc + fits + (n ? ` ALREADY TRIED ${n} time(s) since the last progress and nothing changed.` : '');
+  }
+  const repeated = Object.entries(tried).filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1])[0];
+  const loopRule = 'Rule: if an action was already tried and nothing changed, do NOT repeat it — try something new (a different person, exit, or area).';
+  const loopNote = repeated ? ` Warning: you are looping — "${repeated[0].split(':').slice(1).join(':')}" was done ${repeated[1]} times with no progress. Pick a different action.` : '';
+  const state = { ...situation(ctx), currentFocus: INTENTS[intent], position: { x: ctx.gs.x, y: ctx.gs.y, map: ctx.gs.mapName } };
+  // Follow Jev's top pick; only explore (sample) when that exact pick was already tried repeatedly with no change.
+  const prevExplore = ctx.jev.explore;
+  ctx.jev.explore = false;
+  const { answers } = await ctx.jev.ask('overworld', state, {
+    decision: {
+      type: 'choice',
+      instructions: `You are playing Pokémon Red. Current focus: ${INTENTS[intent]} Choose the overworld action that best serves this focus and the objective. ${loopRule}${loopNote}`,
+      criteria,
+    },
+  });
+  ctx.jev.explore = prevExplore;
+  const ans = answers.decision as { choice: string; probabilities?: Record<string, number> };
+  let key = ans.choice;
+  if ((tried[`${ctx.gs.mapName}:${key}`] ?? 0) >= 3 && ans.probabilities) {
+    const alts = Object.entries(ans.probabilities).filter(([k]) => k !== key);
+    const total = alts.reduce((a, [, p]) => a + p + 0.05, 0);
+    let r = Math.random() * total;
+    for (const [k, p] of alts) { r -= p + 0.05; if (r <= 0) { key = k; break; } }
+    ctx.log('info', `"${ans.choice}" already tried ${tried[`${ctx.gs.mapName}:${ans.choice}`]}x with no change → trying "${key}" instead`);
+  }
+  const c = pool.find((k) => k.key === key)!;
+  tried[tk(c)] = (tried[tk(c)] ?? 0) + 1;
+  const uk = `${ctx.gs.mapName}:${c.key}`;
+  ctx.mem.usedTargets[uk] = (ctx.mem.usedTargets[uk] ?? 0) + 1;
+  agent.noteDecision(`${ctx.gs.mapName}: ${c.key}`);
+  ctx.log('decision', `${ctx.gs.mapName}: ${c.key}`, { options: cands.length });
+  ctx.mem.lastInteraction = null;
+  const mapBefore = ctx.gs.mapId, mapNameBefore = ctx.gs.mapName;
+  await execute(ctx, c, agent);
+  if ((c.target.kind === 'exit' || c.target.kind === 'warp') && c.path.length) {
+    // settle any dialog/cutscene the attempt caused, then check whether we actually left
+    for (let i = 0; i < 400 && (ctx.gs.screen().hasTextBox || (ctx.gs.joyIgnore & 0xf0) || (ctx.gs.u8('wStatusFlags5') & 0x80)); i++) {
+      if (ctx.gs.screen().hasTextBox && !ctx.gs.screen().cursor) tap(ctx, 'A', 8); else ctx.emu.frame();
+    }
+    if (ctx.gs.mapId === mapBefore && !ctx.gs.inBattle) {
+      const k = `${mapNameBefore}:${c.key}`;
+      ctx.mem.blockedExits[k] = (ctx.mem.blockedExits[k] ?? 0) + 1;
+      ctx.log('info', `${c.key}: did not get through (${ctx.mem.blockedExits[k]}x)`);
+    }
+  }
+}
