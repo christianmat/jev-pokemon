@@ -62,9 +62,13 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   // Getting closer to the objective counts as progress (mazes need back-and-forth without new maps)
   const mi = currentMilestone(gs).index;
   if (isFinite(hereHops) && hereHops < (mem.bestHops[mi] ?? Infinity)) mem.bestHops[mi] = hereHops;
-  // any step closer than the previous decision is progress (mazes go back and forth)
-  if (isFinite(hereHops) && hereHops < lastHops) mem.triedNoProgress = {};
-  lastHops = hereHops;
+  // progress = closer than at any point in the recent past (a B1F↔B2F cycle doesn't count as progress each time)
+  if (isFinite(hereHops)) {
+    const recentBest = Math.min(Infinity, ...recentHops);
+    if (hereHops < recentBest) mem.triedNoProgress = {};
+    recentHops.push(hereHops);
+    if (recentHops.length > 60) recentHops.shift();
+  }
   const used = (k: string) => mem.usedTargets[`${gs.mapName}:${k}`] ?? 0;
 
   const routeFacts = (dest: number, destRegions: string[]) => {
@@ -509,7 +513,7 @@ let lastDecisionMap = -1;
 // a walk Jev chose that got interrupted (battle/dialog): resume it instead of re-asking
 let pendingTarget: { map: number; key: string; resumes: number } | null = null;
 let resumingCount = 0;
-let lastHops = Infinity;
+const recentHops: number[] = [];
 
 export async function overworldStep(ctx: Ctx, agent: Agent) {
   if (ctx.gs.mapId !== lastDecisionMap) {
