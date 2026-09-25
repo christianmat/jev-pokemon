@@ -23,6 +23,10 @@ export interface Memory {
   blockedEdges?: Record<string, number>;
   /** a shop counter was left since the 'shop' focus was chosen */
   shopDone?: boolean;
+  /** the PC was logged off since the 'team' focus was chosen */
+  pcDone?: boolean;
+  /** last BILL's PC mode chosen (WITHDRAW/DEPOSIT/RELEASE), for list facts */
+  pcMode?: string;
   bestHops: Record<number, number>; // milestone index -> closest region distance to its objective reached so far // 'MAP:option' -> times it didn't get through // action -> times chosen since the last real progress // cached overworld intent + the situation it was chosen in
 }
 

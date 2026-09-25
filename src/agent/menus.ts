@@ -183,6 +183,23 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     MENU_FACTS.YES = `Give up on ${learn[1]} and keep the current four moves.`;
     MENU_FACTS.NO = `Don't give up; the game goes back to asking whether to forget a move to make room for ${learn[1]}.`;
   }
+  // BILL's PC: what each mode does, and what's in the box / team for the pick lists
+  const PC_FACTS: [RegExp, string][] = [
+    [/^WITHDRAW/, `Move a Pokémon from the box to the team (the team holds 6).${ctx.gs.party().length >= 6 ? ' Your team is full (6/6), so nothing can be withdrawn until a team member is deposited.' : ''}${ctx.gs.box().length ? '' : ' The box is empty.'}`],
+    [/^DEPOSIT/, 'Move a team member into the box (at least one must stay on the team).'],
+    [/^RELEASE/, 'Permanently lets a Pokémon in the box go. It is gone for good.'],
+    [/^CHANGE BOX/, 'Switch to another PC box.'],
+    [/^SEE YA/, "Leave BILL's PC."],
+    [/^LOG OFF/, 'Turn the PC off.'],
+  ];
+  const pcFact = (label: string) => PC_FACTS.find(([re]) => re.test(label))?.[1] ?? '';
+  const box = ctx.gs.box();
+  const boxFacts = (label: string) => {
+    if (ctx.mem.pcMode !== 'WITHDRAW' && ctx.mem.pcMode !== 'RELEASE') return '';
+    const [, base, nth] = label.match(/^(.*?)(?: \((\d+)\))?$/) ?? [];
+    const m = box.filter((b) => b.nickname === base)[(+nth || 1) - 1];
+    return m ? `In the box: ${m.species} Lv${m.level}, ${m.types.join('/')}.` : '';
+  };
   // elevator floors: which map the doors will lead to
   const floorFact = (label: string) => {
     if (!/ELEVATOR/.test(ctx.gs.mapName) || !/^B?\d{1,2}F$/.test(label)) return '';
@@ -190,7 +207,7 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     const m = served.find((mm) => mm.name.endsWith(`_${label}`));
     return m ? `Sets the elevator doors to lead to ${m.name}.` : '';
   };
-  for (const o of opts) criteria[o.text] = `Menu option "${o.text}". ${MENU_FACTS[o.text] ?? ''} ${floorFact(o.text)} ${itemRule(o.text)} ${extraFacts(o.text) || partyFacts(o.text)} ${price(o.text)}`.replace(/\s+/g, ' ').trim();
+  for (const o of opts) criteria[o.text] = `Menu option "${o.text}". ${MENU_FACTS[o.text] ?? ''} ${floorFact(o.text)} ${pcFact(o.text)} ${itemRule(o.text)} ${extraFacts(o.text) || boxFacts(o.text) || partyFacts(o.text)} ${price(o.text)}`.replace(/\s+/g, ' ').trim();
   // Mechanics Jev can always use: scroll a list that has more entries, and back out of any menu.
   const MORE = 'See more items (scroll down)', CLOSE = 'Close this menu';
   if (ctx.gs.screen().moreBelow) criteria[MORE] = 'The list has more entries below the ones shown.';
@@ -207,6 +224,10 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   ctx.jev.explore = prevExplore;
   remember(ctx.mem.actions, `menu[${opts.map((o) => o.text).join('|')}] -> ${choice}`, 12);
   ctx.log('decision', `menu → ${choice}`, { options: opts.map((o) => o.text) });
+  // BILL's PC bookkeeping: which list we're in, and when the PC is left
+  const pcMode = choice.match(/^(WITHDRAW|DEPOSIT|RELEASE)/)?.[1];
+  if (pcMode && opts.some((o) => /^SEE YA/.test(o.text))) ctx.mem.pcMode = pcMode;
+  if (/^(SEE YA|LOG OFF)/.test(choice)) { ctx.mem.pcDone = true; ctx.mem.pcMode = undefined; }
   // leaving a shop counter (BUY/SELL/QUIT) ends a 'shop' focus, like leaving the Mart does
   if (choice === 'QUIT' && opts.some((o) => o.text === 'BUY')) ctx.mem.shopDone = true;
   if (choice === MORE) { for (let i = 0; i <= ctx.gs.menu().max; i++) tap(ctx, 'DOWN', 6); return choice; }

@@ -19,7 +19,8 @@ Landing page: [`site/`](site/)
 
 - **Jev decides:**
   - every menu answer (names, starter, YES/NO, shop, heal, learn/forget moves)
-  - what to focus on (progress, heal, train, catch, shop, explore)
+  - what to focus on (progress, heal, train, catch, shop, explore, team)
+  - which Pokémon to catch, and which to swap in and out of the team at the PC
   - where to go and who to talk to
   - every battle action (move, switch, item, ball, run)
 - **The harness never decides:**

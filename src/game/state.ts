@@ -64,6 +64,18 @@ export class GameState {
 
   get playerName() { return decode(this.m, sym('wPlayerName'), 11); }
 
+  /** Pokémon in the current PC box (species, nickname, level, types). */
+  box(): { species: string; nickname: string; level: number; types: string[] }[] {
+    const n = Math.min(this.u8('wBoxCount'), 20);
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const a = sym('wBoxMons') + i * 33;
+      const sp = this.rom.species.get(this.m[a]);
+      out.push({ species: sp?.name ?? '?', nickname: decode(this.m, sym('wBoxMonNicks') + i * 11, 11), level: this.m[a + 3], types: sp?.types ?? [] });
+    }
+    return out;
+  }
+
   party(): MonState[] {
     const n = Math.min(this.u8('wPartyCount'), 6);
     const out: MonState[] = [];

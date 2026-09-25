@@ -521,6 +521,7 @@ const INTENTS: Record<string, string> = {
   catch: 'Catch new wild Pokémon to build a stronger, more varied team.',
   shop: 'Buy supplies (Poké Balls, Potions) at a Poké Mart.',
   explore: 'Talk to people / explore this area for items or information.',
+  team: "Change the team at a Pokémon Center PC (BILL's PC): deposit team members and withdraw Pokémon from the box.",
 };
 
 /** High-level intent, re-decided only when the situation changes (keeps Jev calls low). */
@@ -539,8 +540,8 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   // 'shop' is done once we've left a Mart (bought or not), so it can't send us straight back in
   const leftMart = ctx.mem.intent?.value === 'shop' && !/MART/.test(gs.mapName) && lastMapWasMart;
   lastMapWasMart = false; // one-shot: only the first decision after leaving a Mart
-  const done = (ctx.mem.intent?.value === 'heal' && healed) || leftMart || (ctx.mem.intent?.value === 'shop' && !!ctx.mem.shopDone);
-  if (done) ctx.mem.shopDone = false;
+  const done = (ctx.mem.intent?.value === 'heal' && healed) || leftMart || (ctx.mem.intent?.value === 'shop' && !!ctx.mem.shopDone) || (ctx.mem.intent?.value === 'team' && !!ctx.mem.pcDone);
+  if (done) { ctx.mem.shopDone = false; ctx.mem.pcDone = false; }
   if (!done && ctx.mem.intent?.key === key && (ctx.mem.intent.age = (ctx.mem.intent.age ?? 0) + 1) <= FOCUS_TTL) return ctx.mem.intent.value;
   const balls = gs.bag().filter((i) => /BALL$/.test(i.name)).reduce((a, i) => a + i.qty, 0);
   const criteria = { ...INTENTS };
@@ -550,6 +551,12 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   if (gs.money < 100) delete (criteria as Record<string, string>).shop;
   if (balls === 0 && gs.money < 200) delete (criteria as Record<string, string>).catch;
   criteria.heal = `${INTENTS.heal} Healing at a Pokémon Center is free.`;
+  // swapping is only possible with Pokémon in the box
+  const box = gs.box();
+  if (box.length) {
+    const lvls = party.map((p) => p.level);
+    criteria.team = `${INTENTS.team} In the box: ${box.map((m) => `${m.nickname} (${m.species} Lv${m.level}, ${m.types.join('/')})`).join(', ')}. Team: ${party.map((p) => `${p.nickname} (${p.species} Lv${p.level}, ${p.types.join('/')})`).join(', ')}. Team levels range ${Math.min(...lvls)}-${Math.max(...lvls)}.`;
+  } else delete (criteria as Record<string, string>).team;
   criteria.train = `${INTENTS.train} Beating trainers also earns money.`;
   const { picked } = await ctx.jev.ask('intent', situation(ctx), {
     intent: { type: 'choice', instructions: 'You are playing Pokémon Red. Given the objective, the party\'s health and levels (vs the typical opponent level of the objective), money and items, what should the player focus on right now?', criteria },
@@ -557,6 +564,7 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   const value = picked.intent as string;
   ctx.mem.intent = { value, key, age: 0 };
   ctx.mem.shopDone = false;
+  ctx.mem.pcDone = false;
   ctx.log('decision', `intent → ${value}`);
   return value;
 }
@@ -639,6 +647,7 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
   const FOCUS: Record<string, RegExp> = {
     heal: /Pokémon Center|heals the whole party|NURSE/,
     shop: /Poké Mart|Shop clerk|CLERK/,
+    team: /Use the PC|Pokémon Center/,
     train: /tall grass/,
     catch: /tall grass/,
     progress: /Leads toward the objective|objective is in this place|objective takes place/,

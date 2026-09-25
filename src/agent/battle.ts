@@ -116,8 +116,13 @@ async function decideBattle(ctx: Ctx) {
       const dex = [...rom.species.values()].find((sp) => sp.name === b.enemy.species)?.dex ?? 0;
       const isNew = dex && !gs.owned(dex) ? `NEW species you don't own yet. ` : 'You already own this species. ';
       const small = `Team size ${party.length}/6. `;
+      // how it would fit the team (facts only)
+      const teamTypes = new Set(party.flatMap((p) => p.types));
+      const newTypes = b.enemy.types.filter((t) => !teamTypes.has(t));
+      const lowerThan = party.filter((p) => p.level < b.enemy.level).length;
+      const fit = `${newTypes.length ? `Its type(s) ${newTypes.join('/')} are not on your team yet. ` : 'Your team already has its type(s). '}Its level ${b.enemy.level} is higher than ${lowerThan} of your ${party.length} team members. ${party.length >= 6 ? 'Your team is full: a caught Pokémon goes to the PC box (it can be swapped in at a Pokémon Center PC). ' : ''}`;
       const pc = Math.round(100 * catchChance(it.name, b.enemy.catchRate, b.enemy.hp, b.enemy.maxHp, b.enemy.status));
-      opts[key] = `Estimated catch chance ~${pc}% per ${it.name} right now. ${isNew}${small}Try to catch the wild ${b.enemy.species} (Lv${b.enemy.level}, ${b.enemy.types.join('/')}, catch rate ${b.enemy.catchRate}/255, HP ${b.enemy.hp}/${b.enemy.maxHp}, status ${b.enemy.status}). Lower HP and sleep/paralysis make catching easier. Party size ${party.length}/6. ${it.qty} left.`;
+      opts[key] = `Estimated catch chance ~${pc}% per ${it.name} right now. ${isNew}${fit}${small}Try to catch the wild ${b.enemy.species} (Lv${b.enemy.level}, ${b.enemy.types.join('/')}, catch rate ${b.enemy.catchRate}/255, HP ${b.enemy.hp}/${b.enemy.maxHp}, status ${b.enemy.status}). Lower HP and sleep/paralysis make catching easier. Party size ${party.length}/6. ${it.qty} left.`;
       actions[key] = () => { if (!select(ctx, 'ITEM')) return; if (cursorTo(ctx, it.name)) confirmA(ctx); else tap(ctx, 'B', 20); };
     }
   }
