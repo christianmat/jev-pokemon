@@ -9,6 +9,7 @@ import { useFieldMove, useItem, slotWithMove, closeMenus } from './field.js';
 import { capabilities } from './context.js';
 
 const SPRITES = (gen as any).sprites as Record<string, string>;
+const loggedUnreachable = new Set<string>();
 
 type Target =
   | { kind: 'warp'; x: number; y: number; dest: number }
@@ -129,6 +130,11 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       const stopAt = open?.find((st) => blockedSquares(ctx).has(`${st.x},${st.y}`));
       const person = stopAt && gs.sprites().find((sp) => !sp.hidden && sp.x === stopAt.x && sp.y === stopAt.y);
       if (open && person) blockers.set(person.index, `Standing in the only path to the exit to ${mapName(dest)}.`);
+      const dbgKey = `${gs.mapName}:${w.x},${w.y}`;
+      if (!loggedUnreachable.has(dbgKey)) {
+        loggedUnreachable.add(dbgKey);
+        ctx.log('debug', `exit (${w.x},${w.y})→${mapName(dest)} unreachable; path ignoring people: ${open ? open.length + ' steps' : 'none'}; first person on it: ${person ? `${SPRITES[person.picture]} idx${person.index} at (${person.x},${person.y})` : stopAt ? `square (${stopAt.x},${stopAt.y}) but no visible sprite there` : 'none'}`);
+      }
       return;
     }
     // merge doors that lead to the same place — but only reachable ones, keeping the nearest
