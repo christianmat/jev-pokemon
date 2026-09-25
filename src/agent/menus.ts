@@ -187,6 +187,8 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   ctx.jev.explore = prevExplore;
   remember(ctx.mem.actions, `menu[${opts.map((o) => o.text).join('|')}] -> ${choice}`, 12);
   ctx.log('decision', `menu → ${choice}`, { options: opts.map((o) => o.text) });
+  // leaving a shop counter (BUY/SELL/QUIT) ends a 'shop' focus, like leaving the Mart does
+  if (choice === 'QUIT' && opts.some((o) => o.text === 'BUY')) ctx.mem.shopDone = true;
   if (choice === MORE) { for (let i = 0; i <= ctx.gs.menu().max; i++) tap(ctx, 'DOWN', 6); return choice; }
   if (choice === CLOSE) { tap(ctx, 'B', 15); return choice; }
   const target = opts.find((o) => o.text === choice)!;

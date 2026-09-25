@@ -505,7 +505,8 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   // 'shop' is done once we've left a Mart (bought or not), so it can't send us straight back in
   const leftMart = ctx.mem.intent?.value === 'shop' && !/MART/.test(gs.mapName) && lastMapWasMart;
   lastMapWasMart = false; // one-shot: only the first decision after leaving a Mart
-  const done = (ctx.mem.intent?.value === 'heal' && healed) || leftMart;
+  const done = (ctx.mem.intent?.value === 'heal' && healed) || leftMart || (ctx.mem.intent?.value === 'shop' && !!ctx.mem.shopDone);
+  if (done) ctx.mem.shopDone = false;
   if (!done && ctx.mem.intent?.key === key && (ctx.mem.intent.age = (ctx.mem.intent.age ?? 0) + 1) <= FOCUS_TTL) return ctx.mem.intent.value;
   const balls = gs.bag().filter((i) => /BALL$/.test(i.name)).reduce((a, i) => a + i.qty, 0);
   const criteria = { ...INTENTS };
@@ -521,6 +522,7 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   });
   const value = picked.intent as string;
   ctx.mem.intent = { value, key, age: 0 };
+  ctx.mem.shopDone = false;
   ctx.log('decision', `intent → ${value}`);
   return value;
 }

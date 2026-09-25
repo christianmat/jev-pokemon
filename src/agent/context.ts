@@ -21,6 +21,8 @@ export interface Memory {
   blockedExits: Record<string, number>;
   /** region edges "a>b" where an exit stopped us (a guard, a script): count of failed attempts */
   blockedEdges?: Record<string, number>;
+  /** a shop counter was left since the 'shop' focus was chosen */
+  shopDone?: boolean;
   bestHops: Record<number, number>; // milestone index -> closest region distance to its objective reached so far // 'MAP:option' -> times it didn't get through // action -> times chosen since the last real progress // cached overworld intent + the situation it was chosen in
 }
 
