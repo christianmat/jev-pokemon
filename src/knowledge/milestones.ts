@@ -13,7 +13,8 @@ export interface Milestone {
   done: (g: GameState) => boolean;
   level?: number;        // typical level of the toughest opponent here (guide knowledge)
   types?: string[];      // types of the objective's opponents (for team matchup facts)
-  at?: { map: string; x: number; y: number }; // where on the map it happens, when a map has separate parts
+  at?: { map: string; x: number; y: number };
+  dualType?: boolean;    // `types` is one dual type (every opponent is e.g. GHOST/POISON), not a list of separate types // where on the map it happens, when a map has separate parts
 }
 
 const ev = (name: string) => (g: GameState) => g.event(name);
@@ -37,7 +38,7 @@ export const MILESTONES: Milestone[] = [
   { id: 'celadon', goal: 'Go west from Lavender Town via Route 8 and the Underground Path to Celadon City.', maps: ['CELADON_CITY'], done: (g) => g.badges > 3 || celadonReached(g), level: 28 },
   { id: 'erika', goal: 'Defeat Erika at the Celadon City Gym (Grass type; Fire, Ice, Flying moves are strong).', maps: ['CELADON_GYM'], done: badge(3), level: 29, types: ['GRASS'] },
   { id: 'rocket_hideout', goal: 'Find the Team Rocket Hideout under the Celadon Game Corner (poster switch), get the Lift Key, and defeat Giovanni to get the Silph Scope.', maps: ['ROCKET_HIDEOUT_B4F'], at: { map: 'ROCKET_HIDEOUT_B4F', x: 25, y: 4 }, done: ev('EVENT_BEAT_ROCKET_HIDEOUT_GIOVANNI'), level: 30 },
-  { id: 'pokemon_tower', goal: 'In Lavender Town, climb Pokémon Tower with the Silph Scope, defeat the Marowak ghost and rescue Mr. Fuji at the top.', maps: ['POKEMON_TOWER_7F'], done: ev('EVENT_RESCUED_MR_FUJI'), level: 32 },
+  { id: 'pokemon_tower', goal: 'In Lavender Town, climb Pokémon Tower with the Silph Scope, defeat the Marowak ghost and rescue Mr. Fuji at the top.', maps: ['POKEMON_TOWER_7F'], done: ev('EVENT_RESCUED_MR_FUJI'), level: 32, types: ['GHOST', 'POISON'], dualType: true },
   { id: 'poke_flute', goal: "Talk to Mr. Fuji in his house in Lavender Town to receive the Poké Flute.", maps: ['MR_FUJIS_HOUSE'], done: ev('EVENT_GOT_POKE_FLUTE'), level: 32 },
   { id: 'fuchsia', goal: 'Travel to Fuchsia City (via Route 12-15 using the Poké Flute on Snorlax, or Cycling Road via Route 16-18).', maps: ['FUCHSIA_CITY'], done: (g) => g.badges > 4 || fuchsiaReached(g), level: 34 },
   { id: 'koga', goal: 'Defeat Koga at the Fuchsia City Gym (Poison type; Psychic and Ground moves are strong).', maps: ['FUCHSIA_GYM'], done: badge(4), level: 43, types: ['POISON'] },

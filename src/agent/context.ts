@@ -83,8 +83,8 @@ export function situation(ctx: Ctx) {
     teamSize: `${party.length}/6`,
     // type-chart facts: how each team member matches up against the objective's opponents
     teamVsObjective: m?.types ? party.map((p) => {
-      const eff = (t: string) => Math.max(0, ...p.moves.filter((mv) => mv.power > 0).map((mv) => ctx.rom.effectiveness(mv.type, [t])));
-      const best = Math.max(...m.types!.map(eff));
+      const eff = (ts: string[]) => Math.max(0, ...p.moves.filter((mv) => mv.power > 0).map((mv) => ctx.rom.effectiveness(mv.type, ts)));
+      const best = m.dualType ? eff(m.types!) : Math.max(...m.types!.map((t) => eff([t])));
       const threat = Math.max(...m.types!.map((t) => ctx.rom.effectiveness(t, p.types)));
       const word = (x: number) => (x === 0 ? 'no effect' : x >= 2 ? `super effective x${x}` : x < 1 ? `not very effective x${x}` : 'normal effectiveness');
       const attacks = p.moves.some((mv) => mv.power > 0) ? `best move vs ${m.types!.join('/')} is ${word(best)}` : 'has no damaging moves';
