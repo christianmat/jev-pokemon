@@ -126,13 +126,13 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     ctx.log('info', 'no Pokémon can use this item → backed out');
     return 'CANCEL';
   }
-  // House rule: never nickname Pokémon (Jev can't type names). Always answer NO.
-  if (/nickname/i.test(ctx.gs.screen().rows.join(' ')) && opts.some((o) => o.text === 'NO')) {
-    const no = opts.find((o) => o.text === 'NO')!;
-    if (no.index !== undefined) cursorToIndex(ctx, no.index);
+  // House rule: every caught Pokémon gets a nickname (Jev spells it letter by letter on the keyboard). Always answer YES.
+  if (/nickname/i.test(ctx.gs.screen().rows.join(' ')) && opts.some((o) => o.text === 'YES')) {
+    const yes = opts.find((o) => o.text === 'YES')!;
+    if (yes.index !== undefined) cursorToIndex(ctx, yes.index);
     confirmA(ctx);
-    ctx.log('info', 'nickname prompt → NO (house rule)');
-    return 'NO';
+    ctx.log('info', 'nickname prompt → YES (house rule)');
+    return 'YES';
   }
   // make option keys unique (e.g. several "-" move slots)
   const seenText = new Map<string, number>();

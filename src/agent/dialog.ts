@@ -1,6 +1,8 @@
 import type { Ctx } from './context.js';
 import { tap, remember, rememberDialog } from './context.js';
 import { decideMenu, findLabel, cursorTo } from './menus.js';
+import { decode } from '../game/text.js';
+import { sym } from '../game/symbols.js';
 
 const NAME = process.env.PLAYER_NAME ?? 'JEV';
 const RIVAL = process.env.RIVAL_NAME ?? 'BLUE';
@@ -36,12 +38,40 @@ export function typeName(ctx: Ctx, name: string) {
   tap(ctx, 'START', 30);
 }
 
+const MAX_NICK = 10;
+const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
+/** Jev picks a nickname letter by letter (A–Z or DONE), then it's typed on the keyboard. */
+export async function spellNickname(ctx: Ctx) {
+  const rows = ctx.gs.screen().rows;
+  const species = (rows.find((r) => /NICKNAME/.test(r)) ?? '').replace(/'S.*$|NICKNAME.*$/i, '').replace(/[^A-Z0-9♂♀.\- ]/g, '').trim() || 'the new Pokémon';
+  // the name must be made up: not a species name, not a nickname already in use (party or current PC box)
+  const taken = new Set<string>([...ctx.rom.species.values()].map((sp) => sp.name));
+  for (const p of ctx.gs.party()) taken.add(p.nickname);
+  const boxCount = Math.min(ctx.gs.u8('wBoxCount'), 20);
+  for (let i = 0; i < boxCount; i++) taken.add(decode(ctx.emu.mem, sym('wBoxMonNicks') + i * 11, 11));
+  let name = '';
+  for (let guard = 0; guard < 40 && name.length <= MAX_NICK; guard++) {
+    if (name.length === MAX_NICK) { if (!taken.has(name)) break; name = name.slice(0, -1); } // full but taken: change the end
+    const options: Record<string, string> = {};
+    for (const l of LETTERS) options[l] = `Name becomes "${name}${l}".${taken.has(name + l) ? ' That is an existing Pokémon name or nickname, so it cannot be the final name.' : ''}`;
+    if (name && !taken.has(name)) options.DONE = `Finish: the nickname is "${name}".`;
+    const pick = await ctx.jev.choose('nickname', { species, nameSoFar: name, lettersLeft: MAX_NICK - name.length },
+      `Give ${species} a nickname, one letter at a time. Rule: it must be a new, made-up name, not the name of any Pokémon species and not a nickname already in use. Name so far: "${name}". Pick the next letter${options.DONE ? ', or DONE to finish' : ''}. Up to ${MAX_NICK} letters.`, options);
+    if (pick === 'DONE') break;
+    if (LETTERS.includes(pick)) name += pick;
+  }
+  if (!name || taken.has(name)) name = (name || 'X').slice(0, MAX_NICK - 1) + 'X'; // safety net, should not happen
+  ctx.log('info', `nickname → ${name}`);
+  typeName(ctx, name);
+}
+
 /** Advances dialog text; delegates on-screen menus to Jev. */
 export async function dialogStep(ctx: Ctx, purpose = 'dialog-menu') {
   const s = ctx.gs.screen();
   if (isNamingScreen(ctx)) {
-    // Pokémon nickname: Jev can't type free text, so keep the species name
-    if (s.rows.some((r) => /NICKNAME/.test(r))) { ctx.log('info', 'nickname screen → keeping species name'); tap(ctx, 'START', 30); return; }
+    // Pokémon nickname: Jev spells it one letter at a time
+    if (s.rows.some((r) => /NICKNAME/.test(r))) { await spellNickname(ctx); return; }
     const rival = s.rows.some((r) => /RIVAL/.test(r));
     const nm = rival ? RIVAL : NAME;
     ctx.log('info', `naming screen → typing ${nm} (or keeping default)`);

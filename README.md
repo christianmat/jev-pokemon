@@ -28,7 +28,8 @@ Landing page: [`site/`](site/)
   - Hidden items aren't shown to Jev, since a human wouldn't know where they are.
 - **House rules:**
   - Text speed FAST and battle animations OFF, set once in the Options menu at boot.
-  - The player is named JEV and the rival BLUE. Pokémon are never nicknamed.
+  - The player is named JEV and the rival BLUE.
+  - Every caught Pokémon gets a nickname: Jev spells it one letter at a time (A–Z or DONE). It has to be a made-up name, not a species name or a nickname already in use.
 - **Loop protection:**
   - Options that were already tried without anything changing get tagged, and Jev is told to try something new.
   - If the same failing choice keeps coming back, the harness samples an alternative.
