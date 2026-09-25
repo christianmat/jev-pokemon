@@ -8,7 +8,8 @@ import { sym } from '../game/symbols.js';
 import { currentMilestone, markVisited, MILESTONES, visitedMaps, restoreVisited } from '../knowledge/milestones.js';
 
 const STUCK_EXPLORE = +(process.env.STUCK_EXPLORE ?? 30);
-const STUCK_RELOAD = +(process.env.STUCK_RELOAD ?? 250);
+// Reloading a checkpoint throws away real progress, so it's off unless explicitly configured.
+const STUCK_RELOAD = +(process.env.STUCK_RELOAD ?? Infinity);
 
 export type Mode = 'battle' | 'dialog' | 'overworld' | 'busy' | 'boot';
 

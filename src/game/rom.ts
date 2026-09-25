@@ -10,7 +10,7 @@ export const TYPE_NAMES: Record<number, string> = {
 };
 
 export interface MoveData { id: number; name: string; effect: number; power: number; type: string; accuracy: number; pp: number }
-export interface SpeciesData { id: number; dex: number; name: string; types: string[]; base: { hp: number; atk: number; def: number; spd: number; spc: number }; catchRate: number }
+export interface SpeciesData { id: number; dex: number; name: string; types: string[]; base: { hp: number; atk: number; def: number; spd: number; spc: number }; catchRate: number; tmhm: Uint8Array; stoneEvos: number[] }
 export interface Warp { x: number; y: number; destMap: number; destWarp: number }
 export interface Sign { x: number; y: number; textId: number }
 export interface MapObject { index: number; sprite: number; x: number; y: number; movement: number; textId: number; trainer: boolean; item: number | null }
@@ -108,8 +108,33 @@ export class Rom {
         types: t1 === t2 ? [t1] : [t1, t2],
         base: { hp: this.b[a + 1], atk: this.b[a + 2], def: this.b[a + 3], spd: this.b[a + 4], spc: this.b[a + 5] },
         catchRate: this.b[a + 8],
+        tmhm: this.b.slice(a + 20, a + 27),
+        stoneEvos: this.stoneEvolutions(id),
       });
     }
+  }
+
+  /** Items (evolution stones) that evolve this species, from EvosMovesPointerTable. */
+  private stoneEvolutions(id: number): number[] {
+    const table = sym('EvosMovesPointerTable');
+    const bank = Math.floor(table / 0x4000);
+    let a = this.flat(bank, this.u16(table + (id - 1) * 2));
+    const out: number[] = [];
+    for (let guard = 0; this.b[a] !== 0 && guard < 8; guard++) {
+      const method = this.b[a];
+      if (method === 1) a += 3;                                  // EVOLVE_LEVEL, level, species
+      else if (method === 2) { out.push(this.b[a + 1]); a += 4; } // EVOLVE_ITEM, item, 1, species
+      else if (method === 3) a += 3;                             // EVOLVE_TRADE, 1, species
+      else break;
+    }
+    return out;
+  }
+
+  /** Can this species learn the TM/HM item? (bit n of the tmhm flags = machine n+1) */
+  canLearnMachine(speciesId: number, itemId: number): boolean {
+    const idx = itemId >= 0xc9 ? itemId - 0xc9 : itemId >= 0xc4 ? 50 + itemId - 0xc4 : -1;
+    const sp = this.species.get(speciesId);
+    return !!sp && idx >= 0 && !!(sp.tmhm[idx >> 3] & (1 << (idx & 7)));
   }
 
   private loadTypeChart() {

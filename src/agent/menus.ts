@@ -115,6 +115,14 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   }
   const opts = readMenuOptions(ctx);
   if (!opts.length) return null;
+  // Party screen for an item/TM: the game marks each Pokémon ABLE / NOT ABLE. If nobody is able, back out.
+  const ableRows = isPartyMenu(ctx) ? ctx.gs.party().map((_, i) => ctx.gs.screen().rows[i * 2 + 1] ?? '') : [];
+  const ableInfo = ableRows.some((r) => /ABLE/.test(r));
+  if (ableInfo && ableRows.every((r) => /NOT ABLE/.test(r))) {
+    for (let i = 0; i < 3 && ctx.gs.screen().cursor; i++) tap(ctx, 'B', 15);
+    ctx.log('info', 'no Pokémon can use this item → backed out');
+    return 'CANCEL';
+  }
   // House rule: never nickname Pokémon (Jev can't type names). Always answer NO.
   if (/nickname/i.test(ctx.gs.screen().rows.join(' ')) && opts.some((o) => o.text === 'NO')) {
     const no = opts.find((o) => o.text === 'NO')!;
@@ -132,7 +140,9 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   const party = ctx.gs.party();
   const partyFacts = (label: string) => {
     const p = party.find((pp) => pp.nickname === label);
-    return p ? `${p.species} Lv${p.level}, ${p.types.join('/')}, HP ${p.hp}/${p.maxHp}${p.hp === 0 ? ' (fainted)' : ''}, moves: ${p.moves.map((m) => m.name).join(', ')}.` : '';
+    if (!p) return '';
+    const able = ableInfo ? (/NOT ABLE/.test(ableRows[p.slot]) ? ' NOT ABLE to use this item (choosing it does nothing).' : ' Able to use this item.') : '';
+    return `${p.species} Lv${p.level}, ${p.types.join('/')}, HP ${p.hp}/${p.maxHp}${p.hp === 0 ? ' (fainted)' : ''}, moves: ${p.moves.map((m) => m.name).join(', ')}.${able}`;
   };
   const MENU_FACTS: Record<string, string> = {
     BUY: 'Opens the shop list to buy items such as Poké Balls and Potions.',

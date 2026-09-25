@@ -60,10 +60,10 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   const hereHops = objMaps.includes(gs.mapId) ? 0 : (hereRegion ? dist.get(hereRegion) : undefined) ?? Infinity;
   // Getting closer to the objective counts as progress (mazes need back-and-forth without new maps)
   const mi = currentMilestone(gs).index;
-  if (isFinite(hereHops) && hereHops < (mem.bestHops[mi] ?? Infinity)) {
-    mem.bestHops[mi] = hereHops;
-    mem.triedNoProgress = {};
-  }
+  if (isFinite(hereHops) && hereHops < (mem.bestHops[mi] ?? Infinity)) mem.bestHops[mi] = hereHops;
+  // any step closer than the previous decision is progress (mazes go back and forth)
+  if (isFinite(hereHops) && hereHops < lastHops) mem.triedNoProgress = {};
+  lastHops = hereHops;
   const used = (k: string) => mem.usedTargets[`${gs.mapName}:${k}`] ?? 0;
 
   const routeFacts = (dest: number, destRegions: string[]) => {
@@ -116,8 +116,22 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const k = `${dest}|${destRegions.join(',')}`;
     const blockedExceptThis = new Set(blocked); blockedExceptThis.delete(`${w.x},${w.y}`);
     const path = px === w.x && py === w.y ? [] : findPath(g, px, py, (x, y) => x === w.x && y === w.y, { blocked: blockedExceptThis, surf });
+    // exit only unreachable because a person stands in the way → offer walking up to them
+    if (!path) {
+      const free = new Set(warpSquares); free.delete(`${w.x},${w.y}`);
+      const open = findPath(g, px, py, (x, y) => x === w.x && y === w.y, { blocked: free, surf });
+      const stopAt = open?.find((st) => blockedSquares(ctx).has(`${st.x},${st.y}`));
+      const person = stopAt && gs.sprites().find((sp) => !sp.hidden && sp.x === stopAt.x && sp.y === stopAt.y);
+      if (open && person) {
+        const who = SPRITES[person.picture] ?? 'someone';
+        const ig = interactGoal(g, person.x, person.y);
+        const toPerson = ig(px, py) ? [] : findPath(g, px, py, ig, { blocked, maxNodes: 6000 });
+        const name = mapName(dest);
+        add(`Get past ${who} at (${person.x},${person.y}) toward ${name}`, `The only path to the exit to ${name} is blocked by ${who} standing at (${person.x},${person.y}). Walk up and talk to them (trainers will battle; some people step aside afterwards). ${routeFacts(dest, destRegions)}`, { kind: 'npc', index: person.index, x: person.x, y: person.y, sprite: who }, toPerson);
+      }
+      return;
+    }
     // merge doors that lead to the same place — but only reachable ones, keeping the nearest
-    if (!path) return;
     const prev = seenWarp.get(k);
     if (prev && prev.path.length <= path.length) return;
     if (prev) out.splice(out.indexOf(prev), 1);
@@ -232,12 +246,18 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     let desc = '';
     if (mv) {
       const knows = party.filter((p) => p.moves.some((m) => m.name === mv.name)).map((p) => p.nickname);
-      if (knows.length === party.length) continue;
-      desc = `Teach ${mv.name} (${mv.type}, power ${mv.power}, accuracy ${mv.accuracy}%) to a party Pokémon.${knows.length ? ` Already known by ${knows.join(', ')}.` : ''}${/^HM/.test(it.name) ? ' HM moves enable field abilities (CUT, SURF, STRENGTH...).' : ''}`;
+      const learners = party.filter((p) => rom.canLearnMachine(p.speciesId, it.id) && !knows.includes(p.nickname));
+      if (!learners.length) continue; // nobody can learn it
+      desc = `Can be learned by: ${learners.map((p) => p.species).join(', ')}. `;
+      desc += `Teach ${mv.name} (${mv.type}, power ${mv.power}, accuracy ${mv.accuracy}%) to a party Pokémon.${knows.length ? ` Already known by ${knows.join(', ')}.` : ''}${/^HM/.test(it.name) ? ' HM moves enable field abilities (CUT, SURF, STRENGTH...).' : ''}`;
     } else if (/POTION|FRESH WATER|SODA POP|LEMONADE|FULL RESTORE|REVIVE|ANTIDOTE|PARLYZ HEAL|AWAKENING|BURN HEAL|ICE HEAL|FULL HEAL/.test(it.name)) {
       if (!injured && !/REVIVE/.test(it.name) && !party.some((p) => p.status !== 'OK')) continue;
       desc = `Use on a Pokémon (heal / cure). ${it.qty} left.`;
-    } else if (/STONE$/.test(it.name)) desc = 'Evolution stone: evolves certain Pokémon.';
+    } else if (/STONE$/.test(it.name)) {
+      const evolvers = party.filter((p) => rom.species.get(p.speciesId)?.stoneEvos.includes(it.id));
+      if (!evolvers.length) continue; // no one in the party evolves with this stone
+      desc = `Evolves ${evolvers.map((p) => p.species).join(', ')}.`;
+    }
     else if (/RARE CANDY/.test(it.name)) desc = 'Raises a Pokémon by one level.';
     else if (/POKé FLUTE/.test(it.name)) desc = 'Plays a tune that wakes up sleeping Pokémon (like a Snorlax blocking a road).';
     else if (/BICYCLE/.test(it.name)) desc = surfing ? '' : 'Ride the bicycle (faster travel).';
@@ -429,6 +449,7 @@ function settleAfterMapChange(ctx: Ctx) {
 }
 
 let lastDecisionMap = -1;
+let lastHops = Infinity;
 
 export async function overworldStep(ctx: Ctx, agent: Agent) {
   if (ctx.gs.mapId !== lastDecisionMap) {

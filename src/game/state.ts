@@ -6,7 +6,7 @@ import { decode, decodeRow } from './text.js';
 // Reads live game state from WRAM. Pure observation — never writes memory.
 
 export interface MonState {
-  slot: number; species: string; nickname: string; level: number; hp: number; maxHp: number;
+  slot: number; speciesId: number; species: string; nickname: string; level: number; hp: number; maxHp: number;
   status: string; types: string[];
   moves: { id: number; name: string; type: string; power: number; accuracy: number; pp: number; maxPp: number }[];
   stats?: { atk: number; def: number; spd: number; spc: number };
@@ -70,7 +70,7 @@ export class GameState {
       const a = sym('wPartyMons') + i * 44;
       const sp = this.rom.species.get(this.m[a]);
       out.push({
-        slot: i, species: sp?.name ?? '?', nickname: decode(this.m, sym('wPartyMonNicks') + i * 11, 11),
+        slot: i, speciesId: this.m[a], species: sp?.name ?? '?', nickname: decode(this.m, sym('wPartyMonNicks') + i * 11, 11),
         level: this.m[a + 33], hp: this.be16(a + 1), maxHp: this.be16(a + 34), status: STATUS(this.m[a + 4]),
         types: sp?.types ?? [],
         moves: this.movesAt(a + 8, a + 29),
