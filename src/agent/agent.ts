@@ -64,7 +64,11 @@ export class Agent {
       }
       this.milestoneIndex = index;
     }
-    const key = `${index}|${Object.keys(mem.visitedMaps).length}|${gs.badges}|${gs.party().length}|${mem.bestHops?.[index] ?? ''}`;
+    // story/trainer event flags set so far (e.g. a scripted event inside the objective's building)
+    const ev = sym('wEventFlags');
+    let events = 0;
+    for (let a = ev; a < ev + 0x140; a++) for (let b = this.ctx.emu.mem[a]; b; b &= b - 1) events++;
+    const key = `${index}|${Object.keys(mem.visitedMaps).length}|${gs.badges}|${gs.party().length}|${mem.bestHops?.[index] ?? ''}|${events}`;
     if (key !== this.lastProgressKey) { this.lastProgressKey = key; this.decisionsSinceProgress = 0; mem.triedNoProgress = {}; }
   }
 
