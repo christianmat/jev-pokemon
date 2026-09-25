@@ -451,6 +451,9 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   const balls = gs.bag().filter((i) => /BALL$/.test(i.name)).reduce((a, i) => a + i.qty, 0);
   const criteria = { ...INTENTS };
   criteria.catch = `${INTENTS.catch} Team size ${party.length}/6. Poké Balls in bag: ${balls}.`;
+  criteria.shop = `${INTENTS.shop} Money: ¥${gs.money}. Prices: Poké Ball ¥200, Potion ¥300, Antidote ¥100.`;
+  criteria.heal = `${INTENTS.heal} Healing at a Pokémon Center is free.`;
+  criteria.train = `${INTENTS.train} Beating trainers also earns money.`;
   const { picked } = await ctx.jev.ask('intent', situation(ctx), {
     intent: { type: 'choice', instructions: 'You are playing Pokémon Red. Given the objective, the party\'s health and levels (vs the typical opponent level of the objective), money and items, what should the player focus on right now?', criteria },
   });
