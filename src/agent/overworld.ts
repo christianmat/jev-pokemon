@@ -525,8 +525,9 @@ const INTENTS: Record<string, string> = {
   team: "Change the team at a Pokémon Center PC (BILL's PC): deposit team members and withdraw Pokémon from the box.",
 };
 
+/** What the team focus waits for: the set of Pokémon owned (team + box). Level-ups don't count, a new catch does. */
 function teamSignature(ctx: Ctx) {
-  return `${ctx.gs.party().map((p) => p.species + p.level).join(',')}|${ctx.gs.box().map((m) => m.species + m.level).join(',')}`;
+  return [...ctx.gs.party().map((p) => p.species), ...ctx.gs.box().map((m) => m.species)].sort().join(',');
 }
 
 /** High-level intent, re-decided only when the situation changes (keeps Jev calls low). */

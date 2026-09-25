@@ -86,7 +86,6 @@ export function situation(ctx: Ctx) {
   const hp = party.reduce((a, p) => a + p.hp, 0), maxHp = party.reduce((a, p) => a + p.maxHp, 0);
   return {
     objective: m ? { goal: m.goal, where: m.maps.join(' / '), typicalOpponentLevel: m.level } : 'Game complete',
-    teamNote: weakTeamNote(ctx),
     partyHealth: maxHp ? `${Math.round((100 * hp) / maxHp)}% total HP, ${party.filter((p) => p.hp === 0).length} fainted` : 'no Pokémon',
     strongestLevel: Math.max(0, ...party.map((p) => p.level)),
     teamSize: `${party.length}/6`,
