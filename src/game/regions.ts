@@ -149,6 +149,9 @@ export class RegionGraph {
   connectionTarget(md: MapData, c: MapData['connections'][number], x: number, y: number): string | null {
     const nx = c.dir === 'north' || c.dir === 'south' ? x + c.xAlign : c.xAlign;
     const ny = c.dir === 'west' || c.dir === 'east' ? y + c.yAlign : c.yAlign;
+    // the landing square itself must be walkable (regionAt also resolves blocked door squares to a neighbor)
+    const comp = this.comp.get(c.map);
+    if (!comp || nx < 0 || ny < 0 || nx >= comp.w || ny >= comp.h || comp.ids[ny * comp.w + nx] < 0) return null;
     return this.regionAt(c.map, nx, ny);
   }
 
