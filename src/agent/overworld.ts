@@ -714,6 +714,9 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
   ctx.mem.lastInteraction = null;
   const mapBefore = ctx.gs.mapId, mapNameBefore = ctx.gs.mapName;
   const fromRegion = regionGraph(ctx).regionAt(mapBefore, ctx.gs.x, ctx.gs.y);
+  const goal = c.path[c.path.length - 1];
+  const distTo = () => (goal ? Math.abs(ctx.gs.x - goal.x) + Math.abs(ctx.gs.y - goal.y) : 0);
+  const distStart = distTo();
   const tg = c.target as { kind: string; x?: number; y?: number; dir?: string };
   const edges = (destRegionsByKey.get(tg.kind === 'warp' ? `w:${tg.x},${tg.y}` : `e:${tg.dir}`) ?? []).map((r) => `${fromRegion}>${r}`);
   const res = await execute(ctx, c, agent);
@@ -739,7 +742,9 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
     if (battleComing()) { battleInterrupt(); return; }
     // stopped = a speech sent us back, or the walk finished and we're still here; a silent interruption
     // (ledge hop, cutscene) is not a failure: the walk gets resumed
-    if (ctx.gs.mapId === mapBefore && (said.length || (isExit && res !== 'interrupted'))) {
+    // a speech only means "stopped" if we didn't get any closer (a guard sends you back; a healing zone doesn't)
+    const advanced = distTo() <= distStart - 2;
+    if (ctx.gs.mapId === mapBefore && ((said.length && !advanced) || (isExit && res !== 'interrupted' && !said.length))) {
       const k = `${mapNameBefore}:${c.key}`;
       ctx.mem.blockedExits[k] = (ctx.mem.blockedExits[k] ?? 0) + 1;
       if (said.length) ctx.mem.npcText[`${k}:blocked`] = said.join(' ').slice(-1500);
