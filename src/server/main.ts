@@ -69,7 +69,12 @@ function updateOverlay(r?: { n: number; purpose: string; picked: Record<string, 
   const lines = ['# JEV PLAYS POKEMON RED', `~ ${st.badges} badges | goal ${st.milestone.index}/${st.milestone.total}`, `~ ${calls.toLocaleString('en-US')} jev calls | ${tokens.toLocaleString('en-US')} tokens`, `~ total cost: $${cost.toFixed(3)} USD`, ''];
   lines.push('# GOAL', ...wrap(st.milestone.goal ?? 'Game complete!', W).slice(0, 5), '');
   lines.push('# WHERE', st.map.replace(/_/g, ' '), '', '# TEAM');
-  for (const p of st.party) lines.push(`${p.species.slice(0, 10).padEnd(10)} Lv${String(p.level).padEnd(3)}${String(p.hp).padStart(3)}/${p.maxHp}`);
+  // "SPECIES (NICK)" when it has a nickname; stats right-aligned so the columns line up
+  for (const p of st.party) {
+    const nm = p.name && p.name !== p.species ? `${p.species} (${p.name})` : p.species;
+    const stats = `Lv${String(p.level).padEnd(3)}${String(p.hp).padStart(3)}/${p.maxHp}`;
+    lines.push(`${nm.slice(0, Math.max(10, W - stats.length - 1)).padEnd(Math.max(10, W - stats.length - 1))} ${stats}`);
+  }
   if (r) {
     const a: any = Object.values(r.answers)[0];
     lines.push('', `# JEV DECISION (${r.purpose})`, ...wrap(`> ${String(Object.values(r.picked)[0])}`, W).slice(0, 2));
