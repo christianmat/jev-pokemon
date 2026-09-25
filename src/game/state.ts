@@ -17,7 +17,8 @@ export interface ScreenState {
   hasTextBox: boolean;      // box-drawing chars present
   nonMapTiles: number;      // tiles >= $60 (font/UI). Overworld map tiles are always < $60.
   dialog: string;           // text inside the bottom dialog box
-  waitingForA: boolean;     // ▼ prompt visible
+  waitingForA: boolean;     // ▼ prompt visible in the dialog box
+  moreBelow: boolean;       // a list shows a ▼ 'more items' arrow
   cursor: { x: number; y: number } | null; // ▶ position
 }
 
@@ -144,7 +145,7 @@ export class GameState {
   screen(): ScreenState {
     const base = sym('wTileMap');
     const rows: string[] = [];
-    let hasTextBox = false, waitingForA = false, nonMapTiles = 0;
+    let hasTextBox = false, waitingForA = false, moreBelow = false, nonMapTiles = 0;
     let cursor: ScreenState['cursor'] = null;
     for (let y = 0; y < 18; y++) {
       const tiles = this.m.subarray(base + y * 20, base + y * 20 + 20);
@@ -153,12 +154,13 @@ export class GameState {
         if (t >= 0x60) nonMapTiles++;
         if (t >= 0x79 && t <= 0x7e) hasTextBox = true;
         if (t === 0xed) cursor = { x, y };
-        if (t === 0xee) waitingForA = true;
+        if (t === 0xee && y >= 12) waitingForA = true;
+        if (t === 0xee && y < 12) moreBelow = true; // ▼ in the dialog box; a ▼ higher up is a list's 'more below' arrow
       }
       rows.push(decodeRow(tiles));
     }
     const dialog = hasTextBox ? [rows[14], rows[16]].map((r) => r.replace(/[┌─┐│└┘]/g, '').trim()).filter(Boolean).join(' ') : '';
-    return { rows, hasTextBox, nonMapTiles, dialog, waitingForA, cursor };
+    return { rows, hasTextBox, nonMapTiles, dialog, waitingForA, moreBelow, cursor };
   }
 
   /** Menu registers (cursor-driven menus). */

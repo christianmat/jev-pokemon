@@ -161,6 +161,10 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     return '';
   };
   for (const o of opts) criteria[o.text] = `Menu option "${o.text}". ${MENU_FACTS[o.text] ?? ''} ${itemRule(o.text)} ${extraFacts(o.text) || partyFacts(o.text)} ${price(o.text)}`.replace(/\s+/g, ' ').trim();
+  // Mechanics Jev can always use: scroll a list that has more entries, and back out of any menu.
+  const MORE = 'See more items (scroll down)', CLOSE = 'Close this menu';
+  if (ctx.gs.screen().moreBelow) criteria[MORE] = 'The list has more entries below the ones shown.';
+  if (!opts.some((o) => /^(CANCEL|EXIT|NO|QUIT)$/.test(o.text))) criteria[CLOSE] = 'Leave this menu without choosing anything (B button).';
   const seenKey = screenText + '|' + opts.map((o) => o.text).join('|');
   const repeats = (menuRepeats.get(seenKey) ?? 0) + 1;
   menuRepeats.set(seenKey, repeats);
@@ -172,6 +176,8 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   ctx.jev.explore = prevExplore;
   remember(ctx.mem.actions, `menu[${opts.map((o) => o.text).join('|')}] -> ${choice}`, 12);
   ctx.log('decision', `menu → ${choice}`, { options: opts.map((o) => o.text) });
+  if (choice === MORE) { for (let i = 0; i <= ctx.gs.menu().max; i++) tap(ctx, 'DOWN', 6); return choice; }
+  if (choice === CLOSE) { tap(ctx, 'B', 15); return choice; }
   const target = opts.find((o) => o.text === choice)!;
   if (target.index !== undefined && cursorToIndex(ctx, target.index)) {
     confirmA(ctx);
