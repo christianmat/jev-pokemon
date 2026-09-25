@@ -72,6 +72,8 @@ export function select(ctx: Ctx, text: string): boolean {
 
 /** Reads the options of the menu that currently owns the ▶ cursor. */
 const CLOSE_SENTINEL = 'Close this menu';
+/** Back in the overworld: menu repeat counts start over (a prompt after every battle isn't a loop). */
+export function resetMenuRepeats() { menuRepeats.clear(); }
 
 /** a menu label: a word, "-", or an elevator floor (B1F, 5F) */
 const LABEL = /[A-Za-z]{2,}|^-$|^B?\d{1,2}F$/;

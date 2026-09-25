@@ -6,6 +6,7 @@ import { sym, mapName } from '../game/symbols.js';
 import gen from '../data/generated.json' with { type: 'json' };
 import { currentMilestone } from '../knowledge/milestones.js';
 import { useFieldMove, useItem, slotWithMove, closeMenus } from './field.js';
+import { resetMenuRepeats } from './menus.js';
 import { capabilities } from './context.js';
 
 const SPRITES = (gen as any).sprites as Record<string, string>;
@@ -643,6 +644,7 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
   if (busyWaited < 1800 && !overworldReady(ctx)) { ctx.emu.wait(20); busyWaited += 24; return; }
   busyWaited = 0;
   ctx.mem.pcSession = undefined; // back in the overworld: any PC session is over
+  resetMenuRepeats();
   if (ctx.gs.mapId !== lastDecisionMap) {
     lastMapWasMart = /MART/.test(mapName(lastDecisionMap));
     // gym trash-can switches are re-placed on every entry: earlier findings no longer hold
