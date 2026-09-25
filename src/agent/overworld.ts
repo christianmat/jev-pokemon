@@ -180,9 +180,10 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const path = ig(px, py) ? [] : findPath(g, px, py, ig, { blocked, maxNodes: 6000 });
     const k = `${gs.mapName}:npc${sp.index}`;
     const said = mem.npcText[k];
-    const kind = obj?.item != null ? `an item ball (${rom.items.get(obj.item) ?? 'item'})` : spriteName === 'POKE_BALL' ? 'a Poké Ball object' : obj?.trainer ? `a trainer (${spriteName})` : `a person (${spriteName})`;
+    const OBJECTS: Record<string, string> = { POKE_BALL: 'a Poké Ball object', FOSSIL: 'a fossil lying on the ground', BOULDER: 'a boulder', POKEDEX: 'a Pokédex on a table', CLIPBOARD: 'a clipboard', PAPER: 'a piece of paper', OLD_AMBER: 'an amber stone', SNORLAX: 'a sleeping Snorlax' };
+    const kind = obj?.item != null ? `an item ball (${rom.items.get(obj.item) ?? 'item'})` : OBJECTS[spriteName] ?? (obj?.trainer ? `a trainer (${spriteName})` : `a person (${spriteName})`);
     const facts = `${kind} at (${sp.x},${sp.y}).${said ? ` Last time they said: "${said.slice(0, 300)}".` : ' Not yet talked to.'}${spriteName === 'NURSE' ? ' Heals the whole party.' : ''}${spriteName === 'CLERK' ? ' Shop clerk: buy items.' : ''}`;
-    const label = obj?.item != null ? `Pick up item ball at (${sp.x},${sp.y})` : `Talk to ${spriteName} at (${sp.x},${sp.y})`;
+    const label = obj?.item != null ? `Pick up item ball at (${sp.x},${sp.y})` : OBJECTS[spriteName] ? `Examine the ${spriteName.toLowerCase().replace(/_/g, ' ')} at (${sp.x},${sp.y})` : `Talk to ${spriteName} at (${sp.x},${sp.y})`;
     add(label, blockers.has(sp.index) ? `${facts} ${blockers.get(sp.index)}` : facts, { kind: 'npc', index: sp.index, x: sp.x, y: sp.y, sprite: spriteName }, path);
   }
 
