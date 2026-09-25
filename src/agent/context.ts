@@ -25,6 +25,8 @@ export interface Memory {
   shopDone?: boolean;
   /** the PC was logged off since the 'team' focus was chosen */
   pcDone?: boolean;
+  /** team+box signature when the PC was last left: the 'team' focus isn't offered again until it changes */
+  teamSig?: string;
   /** last BILL's PC mode chosen (WITHDRAW/DEPOSIT/RELEASE), for list facts */
   pcMode?: string;
   bestHops: Record<number, number>; // milestone index -> closest region distance to its objective reached so far // 'MAP:option' -> times it didn't get through // action -> times chosen since the last real progress // cached overworld intent + the situation it was chosen in

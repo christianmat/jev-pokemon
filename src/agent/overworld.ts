@@ -524,6 +524,10 @@ const INTENTS: Record<string, string> = {
   team: "Change the team at a Pokémon Center PC (BILL's PC): deposit team members and withdraw Pokémon from the box.",
 };
 
+function teamSignature(ctx: Ctx) {
+  return `${ctx.gs.party().map((p) => p.species + p.level).join(',')}|${ctx.gs.box().map((m) => m.species + m.level).join(',')}`;
+}
+
 /** High-level intent, re-decided only when the situation changes (keeps Jev calls low). */
 async function decideIntent(ctx: Ctx): Promise<string> {
   const { gs } = ctx;
@@ -541,6 +545,7 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   const leftMart = ctx.mem.intent?.value === 'shop' && !/MART/.test(gs.mapName) && lastMapWasMart;
   lastMapWasMart = false; // one-shot: only the first decision after leaving a Mart
   const done = (ctx.mem.intent?.value === 'heal' && healed) || leftMart || (ctx.mem.intent?.value === 'shop' && !!ctx.mem.shopDone) || (ctx.mem.intent?.value === 'team' && !!ctx.mem.pcDone);
+  if (done && ctx.mem.intent?.value === 'team') ctx.mem.teamSig = teamSignature(ctx);
   if (done) { ctx.mem.shopDone = false; ctx.mem.pcDone = false; }
   if (!done && ctx.mem.intent?.key === key && (ctx.mem.intent.age = (ctx.mem.intent.age ?? 0) + 1) <= FOCUS_TTL) return ctx.mem.intent.value;
   const balls = gs.bag().filter((i) => /BALL$/.test(i.name)).reduce((a, i) => a + i.qty, 0);
@@ -553,7 +558,8 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   criteria.heal = `${INTENTS.heal} Healing at a Pokémon Center is free.`;
   // swapping is only possible with Pokémon in the box
   const box = gs.box();
-  if (box.length) {
+  // offered only when there's something in the box, and the team/box changed since the PC was last used
+  if (box.length && ctx.mem.teamSig !== teamSignature(ctx)) {
     const lvls = party.map((p) => p.level);
     criteria.team = `${INTENTS.team} In the box: ${box.map((m) => `${m.nickname} (${m.species} Lv${m.level}, ${m.types.join('/')})`).join(', ')}. Team: ${party.map((p) => `${p.nickname} (${p.species} Lv${p.level}, ${p.types.join('/')})`).join(', ')}. Team levels range ${Math.min(...lvls)}-${Math.max(...lvls)}.`;
   } else delete (criteria as Record<string, string>).team;

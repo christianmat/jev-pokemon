@@ -66,6 +66,21 @@ export async function spellNickname(ctx: Ctx) {
   typeName(ctx, name);
 }
 
+let staleWaits = 0;
+/** True when the CPU is inside the game's menu input loop (HandleMenuInput), i.e. a menu is accepting input. */
+function menuActive(ctx: Ctx): boolean {
+  const core = ctx.emu.core, lo = sym('HandleMenuInput'), hi = sym('PlaceMenuCursor');
+  for (let f = 0; f < 4; f++) {
+    const sp = core.stackPointer;
+    for (let i = 0; i < 12; i++) {
+      const ret = core.memoryRead(sp + 2 * i) | (core.memoryRead(sp + 2 * i + 1) << 8);
+      if (ret >= lo && ret < hi) return true;
+    }
+    ctx.emu.frame();
+  }
+  return false;
+}
+
 /** Advances dialog text; delegates on-screen menus to Jev. */
 export async function dialogStep(ctx: Ctx, purpose = 'dialog-menu') {
   const s = ctx.gs.screen();
@@ -111,6 +126,9 @@ export async function dialogStep(ctx: Ctx, purpose = 'dialog-menu') {
     if (cursorTo(ctx, 'OPTION')) tap(ctx, 'A', 40);
     return;
   }
+  // an old menu can stay drawn while new text prints: only answer once the game is really waiting in its menu loop
+  if (s.cursor && !s.waitingForA && !menuActive(ctx) && staleWaits++ < 40) { ctx.emu.wait(6); return; }
+  staleWaits = 0;
   if (s.cursor && !s.waitingForA) {
     // Start menu opened by accident (we never open it without intent) → close it
     if (findLabel(ctx, 'POKéDEX') && findLabel(ctx, 'EXIT') || findLabel(ctx, 'SAVE') && findLabel(ctx, 'OPTION') && findLabel(ctx, 'EXIT')) {
