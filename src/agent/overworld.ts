@@ -324,7 +324,11 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       const low = [...party].sort((a, b) => a.level - b.level)[0];
       desc = `You have ${it.qty}. Each one raises one Pokémon by one level (for example ${low?.nickname} Lv${low?.level} → Lv${(low?.level ?? 0) + 1}).`;
     }
-    else if (/POKé FLUTE/.test(it.name)) desc = 'Plays a tune that wakes up sleeping Pokémon (like a Snorlax blocking a road).';
+    else if (/POKé FLUTE/.test(it.name)) {
+      // only worth offering where something is asleep on the map (a Snorlax blocking the road)
+      const sleeper = gs.sprites().some((sp) => !sp.hidden && SPRITES[sp.picture] === 'SNORLAX');
+      desc = sleeper ? 'Plays a tune that wakes up sleeping Pokémon (like a Snorlax blocking a road).' : '';
+    }
     else if (/BICYCLE/.test(it.name)) desc = surfing ? '' : 'Ride the bicycle (faster travel).';
     else if (/ESCAPE ROPE/.test(it.name)) desc = 'Escape from a cave/dungeon back to the last Pokémon Center.';
     if (!desc) continue;
