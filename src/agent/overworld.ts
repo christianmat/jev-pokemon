@@ -451,7 +451,10 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   const fainted = party.filter((p) => p.hp === 0).length;
   const key = `${hpFrac < 0.25 ? 'low' : 'ok'}|${fainted}|${party.map((p) => p.level).join(',')}|${gs.badges}|${currentMilestone(gs).index}|${gs.bag().map((i) => i.name).join(',')}|${Math.floor(gs.money / 500)}`;
   // re-ask Jev every FOCUS_TTL overworld decisions even if nothing changed, so a focus can't trap it
-  if (ctx.mem.intent?.key === key && (ctx.mem.intent.age = (ctx.mem.intent.age ?? 0) + 1) <= FOCUS_TTL) return ctx.mem.intent.value;
+  // a finished focus is re-asked (e.g. 'heal' once everyone is at full HP with no status problems)
+  const healed = party.every((p) => p.hp === p.maxHp && p.status === 'OK');
+  const done = ctx.mem.intent?.value === 'heal' && healed;
+  if (!done && ctx.mem.intent?.key === key && (ctx.mem.intent.age = (ctx.mem.intent.age ?? 0) + 1) <= FOCUS_TTL) return ctx.mem.intent.value;
   const balls = gs.bag().filter((i) => /BALL$/.test(i.name)).reduce((a, i) => a + i.qty, 0);
   const criteria = { ...INTENTS };
   criteria.catch = `${INTENTS.catch} Team size ${party.length}/6. Poké Balls in bag: ${balls}.`;
