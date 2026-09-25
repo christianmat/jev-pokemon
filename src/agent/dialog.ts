@@ -58,7 +58,7 @@ export async function dialogStep(ctx: Ctx, purpose = 'dialog-menu') {
       if (line && talk[talk.length - 1] !== line) {
         if (talk.length && line.startsWith(talk[talk.length - 1])) talk[talk.length - 1] = line; else talk.push(line);
       }
-      ctx.mem.npcText[k] = talk.join(' ').slice(0, 300);
+      ctx.mem.npcText[k] = talk.join(' ').slice(-1500);
     }
   }
   // Options screen: configure once (fast text, no battle animations), then leave.
