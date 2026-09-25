@@ -640,8 +640,9 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
   const res = await execute(ctx, c, agent);
   // a trainer battle cut the walk short: not a failed attempt, it gets resumed
   const battleInterrupt = () => { tried[tk(c)] = Math.max(0, (tried[tk(c)] ?? 1) - 1); };
-  if ((c.target.kind === 'exit' || c.target.kind === 'warp') && c.path.length) {
-    // settle any dialog/cutscene the attempt caused (keeping what was said), then check whether we actually left
+  const isExit = (c.target.kind === 'exit' || c.target.kind === 'warp') && c.path.length > 0;
+  if (isExit || res === 'interrupted') {
+    // settle any dialog/cutscene the attempt caused (keeping what was said), then check whether we got there
     const said: string[] = [];
     const settleTap = () => {
       const sc = ctx.gs.screen();
@@ -654,14 +655,12 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
     // a trainer's battle can start a moment after its text closes
     for (let i = 0; i < 300 && ctx.gs.mapId === mapBefore && !ctx.gs.inBattle; i++) settleTap();
     if (ctx.gs.inBattle) { battleInterrupt(); return; }
-    if (ctx.gs.mapId === mapBefore) {
+    if (ctx.gs.mapId === mapBefore && (isExit || said.length)) {
       const k = `${mapNameBefore}:${c.key}`;
       ctx.mem.blockedExits[k] = (ctx.mem.blockedExits[k] ?? 0) + 1;
       if (said.length) ctx.mem.npcText[`${k}:blocked`] = said.join(' ').slice(-1500);
       pendingTarget = null; // stopped, not merely interrupted: let Jev decide again
       ctx.log('info', `${c.key}: did not get through (${ctx.mem.blockedExits[k]}x, walk ${res}, at ${ctx.gs.x},${ctx.gs.y})${said.length ? ` — "${said.join(' ').slice(0, 80)}"` : ''}`);
     }
-    return;
   }
-  if (res === 'interrupted') battleInterrupt();
 }
