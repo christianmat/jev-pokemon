@@ -19,3 +19,8 @@ function bfs(sx: number, sy: number, tx: number, ty: number, useSprites: boolean
 const a = bfs(22, 17, 5, 7, true), b = bfs(22, 17, 5, 7, false);
 console.log('with people:', a ? a.length : 'NO PATH', '| without:', b ? b.length : 'NO PATH');
 if (b) console.log('people on the free path:', b.filter((k) => blocked.has(k)).map((k) => `${people.find((p) => `${p.x},${p.y}` === k)!.name}@${k}`));
+for (const p of people) {
+  const saved = new Set(blocked); blocked.delete(`${p.x},${p.y}`);
+  const r = bfs(22, 17, 5, 7, true); if (r) console.log('removing only', p.name, `(${p.x},${p.y})`, 'opens the way');
+  blocked.clear(); saved.forEach((k) => blocked.add(k));
+}

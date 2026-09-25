@@ -127,9 +127,15 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     if (!path) {
       const free = new Set(warpSquares); free.delete(`${w.x},${w.y}`);
       const open = findPath(g, px, py, (x, y) => x === w.x && y === w.y, { blocked: free, surf });
-      const stopAt = open?.find((st) => blockedSquares(ctx).has(`${st.x},${st.y}`));
-      const person = stopAt && gs.sprites().find((sp) => !sp.hidden && sp.x === stopAt.x && sp.y === stopAt.y);
-      if (open && person) blockers.set(person.index, `Standing in the only path to the exit to ${mapName(dest)}.`);
+      // Which single person, if they weren't standing there, would open the way? (test each one on the route)
+      const people = gs.sprites().filter((sp) => !sp.hidden && open?.some((st) => st.x === sp.x && st.y === sp.y));
+      const openers = people.filter((sp) => {
+        const without = new Set(blocked); without.delete(`${sp.x},${sp.y}`); without.delete(`${w.x},${w.y}`);
+        return !!findPath(g, px, py, (x, y) => x === w.x && y === w.y, { blocked: without, surf });
+      });
+      for (const sp of openers) blockers.set(sp.index, `Standing in the only path to the exit to ${mapName(dest)}.`);
+      const stopAt = open?.[0];
+      const person = openers[0];
       const dbgKey = `${gs.mapName}:${w.x},${w.y}`;
       if (!loggedUnreachable.has(dbgKey)) {
         loggedUnreachable.add(dbgKey);
