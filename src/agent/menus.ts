@@ -162,7 +162,8 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     // teaching a TM/HM it already knows does nothing (the game still shows ABLE)
     const mv = ableInfo && ctx.mem.lastItem ? ctx.rom.machineMove([...ctx.rom.items].find(([, n]) => n === ctx.mem.lastItem)?.[0] ?? -1) : undefined;
     const knows = mv && p.moves.some((m) => m.name === mv.name);
-    const able = ableInfo ? (/NOT ABLE/.test(ableRows[p.slot]) ? ' NOT ABLE to use this item (choosing it does nothing).' : knows ? ` Already knows ${mv!.name}: choosing it does nothing.` : ' Able to use this item.') : '';
+    const candy = ctx.mem.lastItem === 'RARE CANDY' ? ` Would go from Lv${p.level} to Lv${p.level + 1}.` : '';
+    const able = candy || ableInfo ? candy + (!ableInfo ? '' : /NOT ABLE/.test(ableRows[p.slot]) ? ' NOT ABLE to use this item (choosing it does nothing).' : knows ? ` Already knows ${mv!.name}: choosing it does nothing.` : ' Able to use this item.') : '';
     return `${p.species} Lv${p.level}, ${p.types.join('/')}, HP ${p.hp}/${p.maxHp}${p.hp === 0 ? ' (fainted)' : ''}, moves: ${p.moves.map((m) => m.name).join(', ')}.${able}`;
   };
   const MENU_FACTS: Record<string, string> = {
@@ -260,7 +261,7 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   const choice = await ctx.jev.choose(purpose, { ...situation(ctx), currentFocus: focus, screen: screenText }, `A menu is open on screen.${focus ? ` The player's current focus is: ${focus}.` : ''} Which option best serves that focus and the objective?${/BUY|MONEY/.test(screenText) ? ` Money: ¥${ctx.gs.money}.` : ' Item rule: only use an item where it actually works (Poké Balls only in wild battles, healing items only on hurt Pokémon, TMs/HMs to teach moves outside battle).'} Rule: if this same menu keeps coming back after your answer, your last answer isn't working — choose a different option.${repeats >= 2 ? ` This exact menu has appeared ${repeats} times.` : ''}`, criteria);
   remember(ctx.mem.actions, `menu[${opts.map((o) => o.text).join('|')}] -> ${choice}`, 12);
   ctx.log('decision', `menu → ${choice}`, { options: opts.map((o) => o.text) });
-  if (/^(TM|HM)\d\d$/.test(choice)) ctx.mem.lastItem = choice;
+  if (/^(TM|HM)\d\d$|^RARE CANDY$/.test(choice)) ctx.mem.lastItem = choice;
   // BILL's PC bookkeeping: which list we're in, and when the PC is left
   const pcMode = choice.match(/^(WITHDRAW|DEPOSIT|RELEASE)/)?.[1];
   if (pcMode && opts.some((o) => /^SEE YA/.test(o.text))) ctx.mem.pcMode = pcMode;

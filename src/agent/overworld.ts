@@ -319,7 +319,10 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       if (!evolvers.length) continue; // no one in the party evolves with this stone
       desc = `Evolves ${evolvers.map((p) => p.species).join(', ')}.`;
     }
-    else if (/RARE CANDY/.test(it.name)) desc = 'Raises a Pokémon by one level.';
+    else if (/RARE CANDY/.test(it.name)) {
+      const low = [...party].sort((a, b) => a.level - b.level)[0];
+      desc = `You have ${it.qty}. Each one raises one Pokémon by one level (for example ${low?.nickname} Lv${low?.level} → Lv${(low?.level ?? 0) + 1}).`;
+    }
     else if (/POKé FLUTE/.test(it.name)) desc = 'Plays a tune that wakes up sleeping Pokémon (like a Snorlax blocking a road).';
     else if (/BICYCLE/.test(it.name)) desc = surfing ? '' : 'Ride the bicycle (faster travel).';
     else if (/ESCAPE ROPE/.test(it.name)) desc = 'Escape from a cave/dungeon back to the last Pokémon Center.';
@@ -560,12 +563,14 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   const criteria = { ...INTENTS };
   const weakNote = weakTeamNote(ctx);
   criteria.catch = `${INTENTS.catch} Team size ${party.length}/6. Poké Balls in bag: ${balls}.${weakNote ? ` ${weakNote}` : ''}`;
-  criteria.shop = `${INTENTS.shop} Money: ¥${gs.money}. Prices: Poké Ball ¥200, Potion ¥300, Antidote ¥100.`;
+  const healItems = gs.bag().filter((i) => /POTION|FRESH WATER|SODA POP|LEMONADE|FULL RESTORE|REVIVE/.test(i.name));
+  const healNote = ` Healing items in the bag: ${healItems.length ? healItems.map((i) => `${i.name} x${i.qty}`).join(', ') : 'none'} (they heal on the spot, without walking to a Pokémon Center).`;
+  criteria.shop = `${INTENTS.shop} Money: ¥${gs.money}. Prices: Poké Ball ¥200, Potion ¥300 (heals 20 HP), Super Potion ¥700 (heals 50 HP), Antidote ¥100.${healNote}`;
   // impossible focuses aren't offered (same rule as unusable items)
   // shop is offered when there's money to spend: ¥100+, and ¥200+ more than when the last shop visit ended
   if (gs.money < 100 || (ctx.mem.shopMoney !== undefined && gs.money < ctx.mem.shopMoney + 200)) delete (criteria as Record<string, string>).shop;
   if (balls === 0 && gs.money < 200) delete (criteria as Record<string, string>).catch;
-  criteria.heal = `${INTENTS.heal} Healing at a Pokémon Center is free.`;
+  criteria.heal = `${INTENTS.heal} Healing at a Pokémon Center is free.${healNote}`;
   // loop rule: the same team lost everything at the same place 2+ times -> 'progress' comes back once the team changes
   // "changed" = a different lineup, or 5+ levels gained in total since that last loss
   const lineup = (t: string) => t.split(', ').map((x) => x.replace(/ Lv\d+$/, '')).sort().join(',');
