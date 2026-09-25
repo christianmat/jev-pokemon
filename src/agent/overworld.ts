@@ -665,8 +665,9 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
     };
     for (let i = 0; i < 400 && !ctx.gs.inBattle && (ctx.gs.screen().hasTextBox || (ctx.gs.joyIgnore & 0xf0) || (ctx.gs.u8('wStatusFlags5') & 0x80)); i++) settleTap();
     // a trainer's battle can start a moment after its text closes
-    for (let i = 0; i < 300 && ctx.gs.mapId === mapBefore && !ctx.gs.inBattle; i++) settleTap();
-    if (ctx.gs.inBattle) { battleInterrupt(); return; }
+    const battleComing = () => ctx.gs.inBattle || ctx.gs.u8('wCurOpponent') !== 0; // set when a trainer engages
+    for (let i = 0; i < 300 && ctx.gs.mapId === mapBefore && !battleComing(); i++) settleTap();
+    if (battleComing()) { battleInterrupt(); return; }
     if (ctx.gs.mapId === mapBefore && (isExit || said.length)) {
       const k = `${mapNameBefore}:${c.key}`;
       ctx.mem.blockedExits[k] = (ctx.mem.blockedExits[k] ?? 0) + 1;
