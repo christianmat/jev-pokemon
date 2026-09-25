@@ -4,6 +4,7 @@ import type { GameState } from '../game/state.js';
 import type { Jev } from '../jev/client.js';
 import { RegionGraph, type Caps } from '../game/regions.js';
 import { currentMilestone } from '../knowledge/milestones.js';
+import { mapName } from '../game/symbols.js';
 
 export interface Memory {
   visitedMaps: Record<string, number>;
@@ -71,6 +72,8 @@ export function situation(ctx: Ctx) {
     partyHealth: maxHp ? `${Math.round((100 * hp) / maxHp)}% total HP, ${party.filter((p) => p.hp === 0).length} fainted` : 'no Pokémon',
     strongestLevel: Math.max(0, ...party.map((p) => p.level)),
     teamSize: `${party.length}/6`,
+    // where the player reappears if every Pokémon faints (the last Pokémon Center used); losing also halves money
+    returnPointIfAllFaint: `Pokémon Center in ${mapName(gs.u8('wLastBlackoutMap'))}`,
     pokeBalls: gs.bag().filter((i) => /BALL$/.test(i.name)).reduce((a, i) => a + i.qty, 0),
     location: gs.mapName,
     badges: gs.badgeCount,
