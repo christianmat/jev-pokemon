@@ -70,7 +70,9 @@ export class Jev {
   async ask(purpose: string, state: JevInput, questions: Record<string, JevQuestion>) {
     const key = crypto.createHash('sha1').update(JSON.stringify([state, questions])).digest('hex');
     const t0 = Date.now();
-    let res = this.explore ? undefined : this.cache.get(key);
+    // loop-protection sampling only applies to where-to-go decisions; menus, battles and the PC use Jev's top pick
+    const explore = this.explore && purpose === 'overworld';
+    let res = explore ? undefined : this.cache.get(key);
     const cached = !!res;
     if (!res) {
       await this.throttle();
@@ -89,7 +91,7 @@ export class Jev {
 
     const picked: Record<string, string | number> = {};
     for (const [id, a] of Object.entries(res.answers)) {
-      if (a.type === 'choice') picked[id] = this.explore && a.probabilities ? sample(flatten(a.probabilities)) : a.choice;
+      if (a.type === 'choice') picked[id] = explore && a.probabilities ? sample(flatten(a.probabilities)) : a.choice;
       else if (a.type === 'boolean') picked[id] = a.probability;
       else picked[id] = a.score;
     }
