@@ -360,7 +360,13 @@ function walk(ctx: Ctx, path: Step[]): WalkResult {
 function face(ctx: Ctx, tx: number, ty: number) {
   const dx = Math.sign(tx - ctx.gs.x), dy = Math.sign(ty - ctx.gs.y);
   const d = dx > 0 ? 'RIGHT' : dx < 0 ? 'LEFT' : dy > 0 ? 'DOWN' : 'UP';
-  ctx.emu.press(d, 3, 6);
+  const want = { DOWN: 0, UP: 4, LEFT: 8, RIGHT: 0xc }[d];
+  const facing = () => ctx.emu.mem[sym('wSpritePlayerStateData1FacingDirection')];
+  // a tap right after a walk can be dropped; retry until the player actually faces the target
+  for (let i = 0; i < 4 && (i === 0 || facing() !== want); i++) {
+    waitWalkDone(ctx);
+    ctx.emu.press(d, 3, 6);
+  }
 }
 
 export async function execute(ctx: Ctx, c: Candidate, agent: Agent): Promise<WalkResult | undefined> {
