@@ -556,6 +556,14 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   if (gs.money < 100) delete (criteria as Record<string, string>).shop;
   if (balls === 0 && gs.money < 200) delete (criteria as Record<string, string>).catch;
   criteria.heal = `${INTENTS.heal} Healing at a Pokémon Center is free.`;
+  // loop rule: the same team lost everything at the same place 2+ times -> 'progress' comes back once the team changes
+  const teamNow = party.map((p) => `${p.species} Lv${p.level}`).join(', ');
+  const stuckAt = Object.entries(ctx.mem.losses ?? {}).find(([, l]) => l.count >= 2 && l.team === teamNow);
+  if (stuckAt) {
+    delete (criteria as Record<string, string>).progress;
+    const note = ` (Moving on toward the objective isn't offered right now: all your Pokémon fainted at ${stuckAt[0]} ${stuckAt[1].count} times with exactly this team and these levels. It is offered again once the team changes: a level up, a new or different team member.)`;
+    for (const k of Object.keys(criteria)) (criteria as Record<string, string>)[k] += note;
+  }
   // swapping is only possible with Pokémon in the box
   const box = gs.box();
   // offered only when there's something in the box, and the team/box changed since the PC was last used
