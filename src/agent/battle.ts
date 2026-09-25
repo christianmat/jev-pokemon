@@ -66,6 +66,26 @@ async function decideBattle(ctx: Ctx) {
     const koNote = b.kind === 'wild' && catching ? ' — knocks it out, so it can no longer be caught' : '';
     const dmg = mv.power ? `Estimated damage ${lo}-${hi} HP vs enemy's ${b.enemy.hp} HP left${lo >= b.enemy.hp ? ` (likely KO${koNote})` : pct > 50 ? ' (high damage)' : ''}.` : `Status move (no direct damage).${(mv.name === 'REFLECT' && (gs.u8('wPlayerBattleStatus3') & 4)) || (mv.name === 'LIGHT SCREEN' && (gs.u8('wPlayerBattleStatus3') & 2)) ? ' Already in effect: using it again does nothing.' : ''}`;
     const key = `Use ${mv.name}`;
+    // moves whose damage doesn't follow the power formula (Gen 1 rules)
+    const SPECIAL: Record<string, string> = {
+      COUNTER: 'Only works right after being hit by a NORMAL or FIGHTING move this turn: returns double that damage. Otherwise it fails and does nothing.',
+      'SEISMIC TOSS': `Always does damage equal to your level (${me.level} HP).`,
+      'NIGHT SHADE': `Always does damage equal to your level (${me.level} HP).`,
+      'SONIC BOOM': 'Always does 20 HP of damage.',
+      'DRAGON RAGE': 'Always does 40 HP of damage.',
+      'SUPER FANG': `Cuts the enemy's current HP in half (${Math.floor(b.enemy.hp / 2)} HP).`,
+      PSYWAVE: `Random damage from 1 to 1.5x your level (up to ${Math.floor(me.level * 1.5)} HP).`,
+      BIDE: 'Waits 2-3 turns, then returns double the damage taken meanwhile.',
+      GUILLOTINE: 'One-hit KO if it hits; fails against a faster enemy. Low accuracy.',
+      'HORN DRILL': 'One-hit KO if it hits; fails against a faster enemy. Low accuracy.',
+      FISSURE: 'One-hit KO if it hits; fails against a faster enemy. Low accuracy.',
+    };
+    if (SPECIAL[mv.name] && mv.pp > 0) {
+      const ghostImmune = eff === 0 ? ` NO effect against ${b.enemy.types.join('/')}.` : '';
+      opts[key] = `${mv.name}: ${mv.type} move, ${mv.pp} PP left. ${SPECIAL[mv.name]}${ghostImmune}`;
+      actions[key] = () => { if (!select(ctx, 'FIGHT')) return; if (cursorTo(ctx, mv.name)) confirmA(ctx); else tap(ctx, 'B', 20); };
+      continue;
+    }
     const effNote = mv.power ? `${effWord(eff)} against ${b.enemy.types.join('/')}. ${stab ? 'Same-type bonus. ' : ''}` : ''; // type matchups only matter for damaging moves
     opts[key] = mv.pp === 0 ? `${mv.name}: 0 PP left, unusable.` : `${mv.name}: ${mv.type} move, power ${mv.power}, accuracy ${mv.accuracy}%, ${mv.pp} PP left. ${effNote}${dmg}`;
     actions[key] = () => { if (!select(ctx, 'FIGHT')) return; if (cursorTo(ctx, mv.name)) confirmA(ctx); else tap(ctx, 'B', 20); };
