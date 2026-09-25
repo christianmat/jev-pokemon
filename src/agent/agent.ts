@@ -104,7 +104,7 @@ export class Agent {
     const memFile = `${this.saveDir}/${name}.memory.json`;
     if (fs.existsSync(memFile)) {
       const { mem, visited } = JSON.parse(fs.readFileSync(memFile, 'utf8'));
-      Object.assign(this.ctx.mem, { triedNoProgress: {}, blockedExits: {}, bestHops: {} }, mem, { stepsInMap: {} });
+      Object.assign(this.ctx.mem, { triedNoProgress: {}, blockedExits: {}, blockedEdges: {}, bestHops: {} }, mem, { stepsInMap: {} });
       restoreVisited(visited);
     }
     this.lastMap = -1;

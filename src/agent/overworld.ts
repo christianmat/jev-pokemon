@@ -26,6 +26,8 @@ type Target =
   | { kind: 'explore' };
 
 interface Candidate { key: string; desc: string; target: Target; path: Step[] }
+/** destination regions of the exit candidates built last (for learning blocked edges) */
+const destRegionsByKey = new Map<string, string[]>();
 
 const adj = (x: number, y: number, tx: number, ty: number) => Math.abs(x - tx) + Math.abs(y - ty) === 1;
 
@@ -61,7 +63,10 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   const surf = gs.walkState === 2;
   const { m } = currentMilestone(gs);
   const objMaps = (m?.maps ?? []).map((n) => Object.entries((gen as any).maps).find(([, v]: any) => v.name === n)?.[0]).filter(Boolean).map(Number);
-  const dist = rg.distancesTo(objMaps.flatMap((id) => rg.regionsOf(id)));
+  // exits that stopped us at least twice are left out of route distances until one works again
+  const skip = new Set(Object.entries(mem.blockedEdges ?? {}).filter(([, n]) => n >= 2).map(([e]) => e));
+  const dist = rg.distancesTo(objMaps.flatMap((id) => rg.regionsOf(id)), skip);
+  destRegionsByKey.clear();
   const hereRegion = rg.regionAt(gs.mapId, px, py);
   const hereHops = objMaps.includes(gs.mapId) ? 0 : (hereRegion ? dist.get(hereRegion) : undefined) ?? Infinity;
   // Getting closer to the objective counts as progress (mazes need back-and-forth without new maps)
@@ -86,7 +91,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     return `Same distance from the objective (${h} areas).`;
   };
   // distances to services (nearest Pokémon Center / Mart), for healing and shopping intents
-  const serviceDist = (re: RegExp) => rg.distancesTo(Object.entries((gen as any).maps).filter(([, v]: any) => re.test(v.name)).flatMap(([id]) => rg.regionsOf(+id)));
+  const serviceDist = (re: RegExp) => rg.distancesTo(Object.entries((gen as any).maps).filter(([, v]: any) => re.test(v.name)).flatMap(([id]) => rg.regionsOf(+id)), skip);
   const pcDist = serviceDist(/POKECENTER/), martDist = serviceDist(/_MART$/);
   const hereReg = hereRegion ? [hereRegion] : [];
   const svc = (regions: string[]) => {
@@ -159,6 +164,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     if (prev) out.splice(out.indexOf(prev), 1);
     const name = mapName(dest);
     const heal = /POKECENTER/.test(name) ? ' A Pokémon Center: the nurse heals the whole party for free. Healing here also makes it where you return if all your Pokémon faint.' : /MART/.test(name) ? ' A Poké Mart: buy items.' : /GYM/.test(name) ? ' A Pokémon Gym.' : '';
+    destRegionsByKey.set(`w:${w.x},${w.y}`, destRegions);
     add(`Enter ${name}`, `Door/stairs/ladder at (${w.x},${w.y}) leading to ${name}.${heal} ${routeFacts(dest, destRegions)}${svc(destRegions)} ${visitFacts(dest)}`, { kind: 'warp', x: w.x, y: w.y, dest }, path);
     seenWarp.set(k, out[out.length - 1]);
   });
@@ -178,6 +184,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const path2 = findPath(g, px, py, exitGoal, { blocked, allowExit: exitGoal, grassCost: 1, surf });
     const inside = path2 && path2.length ? (path2.length > 1 ? path2[path2.length - 2] : { x: px, y: py }) : null;
     const destRegion = inside && md ? rg.connectionTarget(md, c, inside.x, inside.y) : null;
+    destRegionsByKey.set(`e:${dir}`, destRegion ? [destRegion] : []);
     add(`Go ${c.dir} to ${name}`, `Walk off the ${c.dir} edge of the map into ${name}. ${routeFacts(c.map, destRegion ? [destRegion] : [])}${svc(destRegion ? [destRegion] : [])} ${visitFacts(c.map)}`, { kind: 'exit', dir, dest: c.map }, path2);
   }
 
@@ -637,7 +644,12 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
   ctx.log('decision', `${ctx.gs.mapName}: ${c.key}`, { options: cands.length });
   ctx.mem.lastInteraction = null;
   const mapBefore = ctx.gs.mapId, mapNameBefore = ctx.gs.mapName;
+  const fromRegion = regionGraph(ctx).regionAt(mapBefore, ctx.gs.x, ctx.gs.y);
+  const tg = c.target as { kind: string; x?: number; y?: number; dir?: string };
+  const edges = (destRegionsByKey.get(tg.kind === 'warp' ? `w:${tg.x},${tg.y}` : `e:${tg.dir}`) ?? []).map((r) => `${fromRegion}>${r}`);
   const res = await execute(ctx, c, agent);
+  const bE = (ctx.mem.blockedEdges ??= {});
+  if (ctx.gs.mapId !== mapBefore) for (const e of edges) delete bE[e]; // it worked this time
   // a trainer battle cut the walk short: not a failed attempt, it gets resumed
   const battleInterrupt = () => { tried[tk(c)] = Math.max(0, (tried[tk(c)] ?? 1) - 1); };
   const isExit = (c.target.kind === 'exit' || c.target.kind === 'warp') && c.path.length > 0;
@@ -659,6 +671,7 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
       const k = `${mapNameBefore}:${c.key}`;
       ctx.mem.blockedExits[k] = (ctx.mem.blockedExits[k] ?? 0) + 1;
       if (said.length) ctx.mem.npcText[`${k}:blocked`] = said.join(' ').slice(-1500);
+      if (isExit && fromRegion) for (const e of edges) bE[e] = (bE[e] ?? 0) + 1;
       pendingTarget = null; // stopped, not merely interrupted: let Jev decide again
       ctx.log('info', `${c.key}: did not get through (${ctx.mem.blockedExits[k]}x, walk ${res}, at ${ctx.gs.x},${ctx.gs.y})${said.length ? ` — "${said.join(' ').slice(0, 80)}"` : ''}`);
     }

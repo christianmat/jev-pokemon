@@ -19,6 +19,8 @@ export interface Memory {
   intent: { value: string; key: string; age?: number } | null;
   triedNoProgress: Record<string, number>;
   blockedExits: Record<string, number>;
+  /** region edges "a>b" where an exit stopped us (a guard, a script): count of failed attempts */
+  blockedEdges?: Record<string, number>;
   bestHops: Record<number, number>; // milestone index -> closest region distance to its objective reached so far // 'MAP:option' -> times it didn't get through // action -> times chosen since the last real progress // cached overworld intent + the situation it was chosen in
 }
 

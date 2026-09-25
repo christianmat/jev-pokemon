@@ -174,9 +174,10 @@ export class RegionGraph {
   }
 
   /** Shortest number of region hops from each region TO any of `targets` (reverse BFS). */
-  distancesTo(targets: string[]): Map<string, number> {
+  /** BFS hop counts to the targets; `skip` holds directed edges "a>b" known not to be passable right now. */
+  distancesTo(targets: string[], skip?: Set<string>): Map<string, number> {
     const rev = new Map<string, string[]>();
-    for (const [a, bs] of this.out) for (const b of bs) (rev.get(b) ?? rev.set(b, []).get(b)!).push(a);
+    for (const [a, bs] of this.out) for (const b of bs) if (!skip?.has(`${a}>${b}`)) (rev.get(b) ?? rev.set(b, []).get(b)!).push(a);
     const d = new Map<string, number>(targets.map((t) => [t, 0]));
     const q = [...targets];
     while (q.length) {
