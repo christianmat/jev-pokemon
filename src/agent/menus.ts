@@ -71,6 +71,9 @@ export function select(ctx: Ctx, text: string): boolean {
 }
 
 /** Reads the options of the menu that currently owns the ▶ cursor. */
+/** a menu label: a word, "-", or an elevator floor (B1F, 5F) */
+const LABEL = /[A-Za-z]{2,}|^-$|^B?\d{1,2}F$/;
+
 export function readMenuOptions(ctx: Ctx): Label[] {
   const s = ctx.gs.screen();
   if (!s.cursor) return [];
@@ -87,7 +90,7 @@ export function readMenuOptions(ctx: Ctx): Label[] {
       const text = clean(s.rows[y].slice(topX + 1));
       if (text) tmp.push({ text, x: topX + 1, y, index: i });
     }
-    const wordy = tmp.every((t) => /[A-Za-z]{2,}|^-$/.test(t.text));
+    const wordy = tmp.every((t) => LABEL.test(t.text));
     if (wordy && tmp.length === max + 1 && new Set(tmp.map((t) => t.text)).size === tmp.length) return tmp;
   }
   // Fallback: rows of the cursor's box, in the cursor column, same spacing as the register layout
@@ -98,7 +101,7 @@ export function readMenuOptions(ctx: Ctx): Label[] {
   while (bot < 17 && inBox(bot + 1)) bot++;
   for (let y = top; y <= bot; y++) {
     const text = clean(s.rows[y].slice(col + 1));
-    if (text && /[A-Za-z]{2,}|^-$/.test(text)) opts.push({ text, x: col + 1, y });
+    if (text && LABEL.test(text)) opts.push({ text, x: col + 1, y });
   }
   return opts;
 }
@@ -180,7 +183,14 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     MENU_FACTS.YES = `Give up on ${learn[1]} and keep the current four moves.`;
     MENU_FACTS.NO = `Don't give up; the game goes back to asking whether to forget a move to make room for ${learn[1]}.`;
   }
-  for (const o of opts) criteria[o.text] = `Menu option "${o.text}". ${MENU_FACTS[o.text] ?? ''} ${itemRule(o.text)} ${extraFacts(o.text) || partyFacts(o.text)} ${price(o.text)}`.replace(/\s+/g, ' ').trim();
+  // elevator floors: which map the doors will lead to
+  const floorFact = (label: string) => {
+    if (!/ELEVATOR/.test(ctx.gs.mapName) || !/^B?\d{1,2}F$/.test(label)) return '';
+    const served = [...ctx.rom.maps.values()].filter((m) => m.warps.some((w) => w.destMap === ctx.gs.mapId));
+    const m = served.find((mm) => mm.name.endsWith(`_${label}`));
+    return m ? `Sets the elevator doors to lead to ${m.name}.` : '';
+  };
+  for (const o of opts) criteria[o.text] = `Menu option "${o.text}". ${MENU_FACTS[o.text] ?? ''} ${floorFact(o.text)} ${itemRule(o.text)} ${extraFacts(o.text) || partyFacts(o.text)} ${price(o.text)}`.replace(/\s+/g, ' ').trim();
   // Mechanics Jev can always use: scroll a list that has more entries, and back out of any menu.
   const MORE = 'See more items (scroll down)', CLOSE = 'Close this menu';
   if (ctx.gs.screen().moreBelow) criteria[MORE] = 'The list has more entries below the ones shown.';
