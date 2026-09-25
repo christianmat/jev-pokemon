@@ -459,6 +459,7 @@ export async function execute(ctx: Ctx, c: Candidate, agent: Agent): Promise<Wal
       return;
     }
     case 'hidden': {
+      if (/^Use the PC/.test(c.key)) ctx.mem.pcSession = { steps: 0, sig: '' };
       ctx.mem.lastInteraction = `${gs.mapName}:hidden${t.x},${t.y}`;
       ctx.mem.currentTalk = [];
       face(ctx, t.x, t.y);
@@ -628,6 +629,7 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
   // a script is still running without a text box: wait for it (capped, so this can never hang)
   if (busyWaited < 1800 && !overworldReady(ctx)) { ctx.emu.wait(20); busyWaited += 24; return; }
   busyWaited = 0;
+  ctx.mem.pcSession = undefined; // back in the overworld: any PC session is over
   if (ctx.gs.mapId !== lastDecisionMap) {
     lastMapWasMart = /MART/.test(mapName(lastDecisionMap));
     // gym trash-can switches are re-placed on every entry: earlier findings no longer hold

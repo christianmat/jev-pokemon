@@ -71,6 +71,8 @@ export function select(ctx: Ctx, text: string): boolean {
 }
 
 /** Reads the options of the menu that currently owns the ▶ cursor. */
+const CLOSE_SENTINEL = 'Close this menu';
+
 /** a menu label: a word, "-", or an elevator floor (B1F, 5F) */
 const LABEL = /[A-Za-z]{2,}|^-$|^B?\d{1,2}F$/;
 
@@ -133,6 +135,18 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     confirmA(ctx);
     ctx.log('info', 'nickname prompt → YES (house rule)');
     return 'YES';
+  }
+  // loop guard for PC sessions: 15 menu choices with no change to team, box or bag -> log off
+  const pc = ctx.mem.pcSession;
+  if (pc) {
+    const sig = `${ctx.gs.party().map((p) => p.species + p.level).join(',')}|${ctx.gs.box().map((b) => b.species).join(',')}|${ctx.gs.bag().map((i) => i.name + i.qty).join(',')}`;
+    if (sig !== pc.sig) { pc.sig = sig; pc.steps = 0; }
+    if (++pc.steps > 15) {
+      ctx.log('info', 'PC: 15 menu choices with nothing changed → logging off');
+      for (let i = 0; i < 12 && (ctx.gs.screen().cursor || ctx.gs.screen().hasTextBox); i++) tap(ctx, 'B', 20);
+      ctx.mem.pcDone = true; ctx.mem.pcMode = undefined; ctx.mem.pcSession = undefined;
+      return CLOSE_SENTINEL;
+    }
   }
   // make option keys unique (e.g. several "-" move slots)
   const seenText = new Map<string, number>();

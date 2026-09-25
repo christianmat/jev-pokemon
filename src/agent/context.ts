@@ -31,6 +31,8 @@ export interface Memory {
   losses?: Record<string, { count: number; team: string; moves?: string }>;
   /** last BILL's PC mode chosen (WITHDRAW/DEPOSIT/RELEASE), for list facts */
   pcMode?: string;
+  /** an open PC session: menu choices since the last change to team/box/bag */
+  pcSession?: { steps: number; sig: string };
   bestHops: Record<number, number>; // milestone index -> closest region distance to its objective reached so far // 'MAP:option' -> times it didn't get through // action -> times chosen since the last real progress // cached overworld intent + the situation it was chosen in
 }
 
