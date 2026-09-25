@@ -428,7 +428,7 @@ const FLOOR_FEATURES: Record<string, { x: number; y: number; kind: 'switch' | 'h
   VICTORY_ROAD_3F: [{ x: 3, y: 5, kind: 'switch' }, { x: 23, y: 15, kind: 'hole' }],
 };
 
-const FOCUS_TTL = 12;
+const FOCUS_TTL = 30;
 const MAX_REPEATS_NO_PROGRESS = +(process.env.MAX_REPEATS_NO_PROGRESS ?? 5);
 
 const INTENTS: Record<string, string> = {
@@ -445,15 +445,20 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   const { gs } = ctx;
   const party = gs.party();
   // Focus sticks until the situation meaningfully changes (not on every map change, which caused back-and-forth).
-  const hpBucket = Math.floor((4 * party.reduce((a, p) => a + p.hp, 0)) / Math.max(1, party.reduce((a, p) => a + p.maxHp, 0)));
+  // Re-ask only on decisive changes (a faint, HP under 25%, badge/goal/items/levels) — small HP dips from
+  // wild battles made the focus flip between progress and heal and walk back and forth.
+  const hpFrac = party.reduce((a, p) => a + p.hp, 0) / Math.max(1, party.reduce((a, p) => a + p.maxHp, 0));
   const fainted = party.filter((p) => p.hp === 0).length;
-  const key = `${hpBucket}|${fainted}|${party.map((p) => p.level).join(',')}|${gs.badges}|${currentMilestone(gs).index}|${gs.bag().map((i) => i.name).join(',')}|${Math.floor(gs.money / 500)}`;
+  const key = `${hpFrac < 0.25 ? 'low' : 'ok'}|${fainted}|${party.map((p) => p.level).join(',')}|${gs.badges}|${currentMilestone(gs).index}|${gs.bag().map((i) => i.name).join(',')}|${Math.floor(gs.money / 500)}`;
   // re-ask Jev every FOCUS_TTL overworld decisions even if nothing changed, so a focus can't trap it
   if (ctx.mem.intent?.key === key && (ctx.mem.intent.age = (ctx.mem.intent.age ?? 0) + 1) <= FOCUS_TTL) return ctx.mem.intent.value;
   const balls = gs.bag().filter((i) => /BALL$/.test(i.name)).reduce((a, i) => a + i.qty, 0);
   const criteria = { ...INTENTS };
   criteria.catch = `${INTENTS.catch} Team size ${party.length}/6. Poké Balls in bag: ${balls}.`;
   criteria.shop = `${INTENTS.shop} Money: ¥${gs.money}. Prices: Poké Ball ¥200, Potion ¥300, Antidote ¥100.`;
+  // impossible focuses aren't offered (same rule as unusable items)
+  if (gs.money < 100) delete (criteria as Record<string, string>).shop;
+  if (balls === 0 && gs.money < 200) delete (criteria as Record<string, string>).catch;
   criteria.heal = `${INTENTS.heal} Healing at a Pokémon Center is free.`;
   criteria.train = `${INTENTS.train} Beating trainers also earns money.`;
   const { picked } = await ctx.jev.ask('intent', situation(ctx), {
