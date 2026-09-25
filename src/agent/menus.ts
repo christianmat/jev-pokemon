@@ -212,7 +212,16 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     const m = served.find((mm) => mm.name.endsWith(`_${label}`));
     return m ? `Sets the elevator doors to lead to ${m.name}.` : '';
   };
-  for (const o of opts) criteria[o.text] = `Menu option "${o.text}". ${MENU_FACTS[o.text] ?? ''} ${floorFact(o.text)} ${pcFact(o.text)} ${itemRule(o.text)} ${extraFacts(o.text) || boxFacts(o.text) || partyFacts(o.text)} ${price(o.text)}`.replace(/\s+/g, ' ').trim();
+  // in a BILL's PC pick list: say what picking a Pokémon does
+  const pcListNote = (label: string) => {
+    if (!ctx.mem.pcMode || label === 'Close this menu' || /^(CANCEL|STATS|DEPOSIT|WITHDRAW|RELEASE)$/.test(label) || !/^[A-Z]/.test(label)) return '';
+    const isMon = party.some((p) => p.nickname === label.replace(/ \(\d+\)$/, '')) || box.some((b) => b.nickname === label.replace(/ \(\d+\)$/, ''));
+    if (!isMon) return '';
+    return ctx.mem.pcMode === 'DEPOSIT' ? 'Picking it DEPOSITS it: it leaves your team and goes into the PC box.'
+      : ctx.mem.pcMode === 'WITHDRAW' ? 'Picking it WITHDRAWS it: it joins your team from the PC box.'
+      : 'Picking it RELEASES it: it is gone for good.';
+  };
+  for (const o of opts) criteria[o.text] = `Menu option "${o.text}". ${pcListNote(o.text)} ${MENU_FACTS[o.text] ?? ''} ${floorFact(o.text)} ${pcFact(o.text)} ${itemRule(o.text)} ${extraFacts(o.text) || boxFacts(o.text) || partyFacts(o.text)} ${price(o.text)}`.replace(/\s+/g, ' ').trim();
   // Mechanics Jev can always use: scroll a list that has more entries, and back out of any menu.
   const MORE = 'See more items (scroll down)', CLOSE = 'Close this menu';
   if (ctx.gs.screen().moreBelow) criteria[MORE] = 'The list has more entries below the ones shown.';
