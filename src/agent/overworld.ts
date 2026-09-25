@@ -428,6 +428,7 @@ const FLOOR_FEATURES: Record<string, { x: number; y: number; kind: 'switch' | 'h
   VICTORY_ROAD_3F: [{ x: 3, y: 5, kind: 'switch' }, { x: 23, y: 15, kind: 'hole' }],
 };
 
+const FOCUS_TTL = 12;
 const MAX_REPEATS_NO_PROGRESS = +(process.env.MAX_REPEATS_NO_PROGRESS ?? 5);
 
 const INTENTS: Record<string, string> = {
@@ -447,7 +448,8 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   const hpBucket = Math.floor((4 * party.reduce((a, p) => a + p.hp, 0)) / Math.max(1, party.reduce((a, p) => a + p.maxHp, 0)));
   const fainted = party.filter((p) => p.hp === 0).length;
   const key = `${hpBucket}|${fainted}|${party.map((p) => p.level).join(',')}|${gs.badges}|${currentMilestone(gs).index}|${gs.bag().map((i) => i.name).join(',')}|${Math.floor(gs.money / 500)}`;
-  if (ctx.mem.intent?.key === key) return ctx.mem.intent.value;
+  // re-ask Jev every FOCUS_TTL overworld decisions even if nothing changed, so a focus can't trap it
+  if (ctx.mem.intent?.key === key && (ctx.mem.intent.age = (ctx.mem.intent.age ?? 0) + 1) <= FOCUS_TTL) return ctx.mem.intent.value;
   const balls = gs.bag().filter((i) => /BALL$/.test(i.name)).reduce((a, i) => a + i.qty, 0);
   const criteria = { ...INTENTS };
   criteria.catch = `${INTENTS.catch} Team size ${party.length}/6. Poké Balls in bag: ${balls}.`;
@@ -458,7 +460,7 @@ async function decideIntent(ctx: Ctx): Promise<string> {
     intent: { type: 'choice', instructions: 'You are playing Pokémon Red. Given the objective, the party\'s health and levels (vs the typical opponent level of the objective), money and items, what should the player focus on right now?', criteria },
   });
   const value = picked.intent as string;
-  ctx.mem.intent = { value, key };
+  ctx.mem.intent = { value, key, age: 0 };
   ctx.log('decision', `intent → ${value}`);
   return value;
 }
@@ -466,8 +468,9 @@ async function decideIntent(ctx: Ctx): Promise<string> {
 /** After a warp, wait until the new map is fully loaded (map id, position and sprites stable, input enabled). */
 function settleAfterMapChange(ctx: Ctx) {
   const { gs, emu } = ctx;
+  emu.wait(45); // let the warp fade finish before trusting anything (a fade can look 'stable')
   let last = '', stable = 0;
-  for (let f = 0; f < 300 && stable < 20; f++) {
+  for (let f = 0; f < 400 && stable < 30; f++) {
     const snap = `${gs.mapId}|${gs.x},${gs.y}|${gs.joyIgnore}|${gs.sprites().map((s) => `${s.x},${s.y},${s.hidden}`).join(';')}`;
     stable = snap === last && gs.joyIgnore === 0 ? stable + 1 : 0;
     last = snap;

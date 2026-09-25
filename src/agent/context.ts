@@ -15,7 +15,7 @@ export interface Memory {
   stepsInMap: Record<string, Set<string>>;
   npcText: Record<string, string>;      // what an NPC/sign said last time
   lastInteraction: string | null;
-  intent: { value: string; key: string } | null;
+  intent: { value: string; key: string; age?: number } | null;
   triedNoProgress: Record<string, number>;
   blockedExits: Record<string, number>;
   bestHops: Record<number, number>; // milestone index -> closest region distance to its objective reached so far // 'MAP:option' -> times it didn't get through // action -> times chosen since the last real progress // cached overworld intent + the situation it was chosen in
