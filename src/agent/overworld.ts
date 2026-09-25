@@ -668,7 +668,9 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
     const battleComing = () => ctx.gs.inBattle || ctx.gs.u8('wCurOpponent') !== 0; // set when a trainer engages
     for (let i = 0; i < 300 && ctx.gs.mapId === mapBefore && !battleComing(); i++) settleTap();
     if (battleComing()) { battleInterrupt(); return; }
-    if (ctx.gs.mapId === mapBefore && (isExit || said.length)) {
+    // stopped = a speech sent us back, or the walk finished and we're still here; a silent interruption
+    // (ledge hop, cutscene) is not a failure: the walk gets resumed
+    if (ctx.gs.mapId === mapBefore && (said.length || (isExit && res !== 'interrupted'))) {
       const k = `${mapNameBefore}:${c.key}`;
       ctx.mem.blockedExits[k] = (ctx.mem.blockedExits[k] ?? 0) + 1;
       if (said.length) ctx.mem.npcText[`${k}:blocked`] = said.join(' ').slice(-1500);
