@@ -164,7 +164,8 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   // Mechanics Jev can always use: scroll a list that has more entries, and back out of any menu.
   const MORE = 'See more items (scroll down)', CLOSE = 'Close this menu';
   if (ctx.gs.screen().moreBelow) criteria[MORE] = 'The list has more entries below the ones shown.';
-  if (!opts.some((o) => /^(CANCEL|EXIT|NO|QUIT)$/.test(o.text))) criteria[CLOSE] = 'Leave this menu without choosing anything (B button).';
+  // (not in battle party screens: after a faint the game requires a choice and B does nothing)
+  if (!opts.some((o) => /^(CANCEL|EXIT|NO|QUIT)$/.test(o.text)) && !(ctx.gs.inBattle && isPartyMenu(ctx))) criteria[CLOSE] = 'Leave this menu without choosing anything (B button).';
   const seenKey = screenText + '|' + opts.map((o) => o.text).join('|');
   const repeats = (menuRepeats.get(seenKey) ?? 0) + 1;
   menuRepeats.set(seenKey, repeats);

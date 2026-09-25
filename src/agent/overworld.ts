@@ -109,6 +109,11 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   (md?.warps ?? []).forEach((w, wi) => {
     // LAST_MAP warps: resolve from the ROM (which map warps into this door), not from wLastMap
     let destRegions = md ? rg.warpTargets(md, wi) : [];
+    // two-tile doorways: if this tile doesn't resolve, use its neighbor's destination (same door)
+    if (!destRegions.length && md) {
+      const twin = md.warps.findIndex((w2, j) => j !== wi && w2.destMap === w.destMap && Math.abs(w2.x - w.x) + Math.abs(w2.y - w.y) === 1);
+      if (twin >= 0) destRegions = rg.warpTargets(md, twin);
+    }
     if (w.destMap === 0xff && destRegions.length > 1) {
       const pref = destRegions.filter((r) => r.startsWith(`${lastMap}:`));
       if (pref.length) destRegions = pref;
@@ -514,7 +519,7 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
     shop: /Poké Mart|Shop clerk|CLERK/,
     train: /tall grass/,
     catch: /tall grass/,
-    progress: /toward the objective|objective is in this place|objective takes place/i,
+    progress: /Leads toward the objective|objective is in this place|objective takes place/,
   };
   for (const c of pool) {
     const n = tried[tk(c)] ?? 0;
