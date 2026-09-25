@@ -547,7 +547,7 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   const fainted = party.filter((p) => p.hp === 0).length;
   // a single faint (a weak member in a wild fight) doesn't re-ask; half the team down or low total HP does
   const faintBand = fainted >= Math.ceil(party.length / 2) ? 'many' : 'few';
-  const key = `${hpFrac < 0.25 ? 'low' : 'ok'}|${faintBand}|${party.map((p) => p.species).join(',')}:${Math.floor(party.reduce((a, p) => a + p.level, 0) / 5)}|${gs.badges}|${currentMilestone(gs).index}|${gs.bag().map((i) => i.name).join(',')}|${Math.floor(gs.money / 500)}`;
+  const key = `${hpFrac < 0.25 ? 'low' : 'ok'}|${faintBand}|${party.map((p) => p.species).join(',')}:${Math.floor(party.reduce((a, p) => a + p.level, 0) / 5)}|${gs.badges}|${currentMilestone(gs).index}|${gs.bag().map((i) => i.name).join(',')}`; // money isn't part of it: trainer wins change it all the time (shop has its own money rule)
   // re-ask Jev every FOCUS_TTL overworld decisions even if nothing changed, so a focus can't trap it
   // a finished focus is re-asked (e.g. 'heal' once everyone is at full HP with no status problems)
   const healed = party.every((p) => p.hp === p.maxHp && p.status === 'OK');
