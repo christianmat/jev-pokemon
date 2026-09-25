@@ -350,6 +350,8 @@ function walk(ctx: Ctx, path: Step[]): WalkResult {
     steps.add(`${gs.x},${gs.y}`);
     if (gs.mapId !== map0) { settleAfterMapChange(ctx); return 'warped'; }
     if (gs.inBattle || gs.screen().hasTextBox) return 'interrupted';
+    // a script took control of the player (e.g. a trainer spotted us and is walking over)
+    if (!moved && ((gs.joyIgnore & 0xf0) || (gs.u8('wStatusFlags5') & 0x80))) return 'interrupted';
     if (!moved) return 'blocked';
   }
   return 'ok';
