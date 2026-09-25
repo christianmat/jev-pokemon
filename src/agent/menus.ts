@@ -191,6 +191,11 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     [/^CHANGE BOX/, 'Switch to another PC box.'],
     [/^SEE YA/, "Leave BILL's PC."],
     [/^LOG OFF/, 'Turn the PC off.'],
+    [/^BILL's PC$|^SOMEONE's PC$/, 'Pokémon storage: move Pokémon between the team and the PC box (withdraw / deposit / release).'],
+    [/^[A-Z]+'s PC$/, 'Item storage: store and take out items (no Pokémon here).'],
+    [/^PROF\.OAK's PC$/, 'Rates your Pokédex progress.'],
+    [/^(WITHDRAW|DEPOSIT) ITEM$/, 'Item storage (not Pokémon).'],
+    [/^TOSS ITEM$/, 'Throw away a stored item.'],
   ];
   const pcFact = (label: string) => PC_FACTS.find(([re]) => re.test(label))?.[1] ?? '';
   const box = ctx.gs.box();
@@ -227,7 +232,8 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   // BILL's PC bookkeeping: which list we're in, and when the PC is left
   const pcMode = choice.match(/^(WITHDRAW|DEPOSIT|RELEASE)/)?.[1];
   if (pcMode && opts.some((o) => /^SEE YA/.test(o.text))) ctx.mem.pcMode = pcMode;
-  if (/^(SEE YA|LOG OFF)/.test(choice)) { ctx.mem.pcDone = true; ctx.mem.pcMode = undefined; }
+  // leaving the PC (LOG OFF / SEE YA!, or closing its top menu with B) ends a 'team' focus
+  if (/^(SEE YA|LOG OFF)/.test(choice) || (choice === CLOSE && opts.some((o) => /^LOG OFF/.test(o.text)))) { ctx.mem.pcDone = true; ctx.mem.pcMode = undefined; }
   // leaving a shop counter (BUY/SELL/QUIT) ends a 'shop' focus, like leaving the Mart does
   if (choice === 'QUIT' && opts.some((o) => o.text === 'BUY')) ctx.mem.shopDone = true;
   if (choice === MORE) { for (let i = 0; i <= ctx.gs.menu().max; i++) tap(ctx, 'DOWN', 6); return choice; }
