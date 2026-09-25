@@ -611,10 +611,12 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
     for (let i = 0; i < 400 && (ctx.gs.screen().hasTextBox || (ctx.gs.joyIgnore & 0xf0) || (ctx.gs.u8('wStatusFlags5') & 0x80)); i++) {
       if (ctx.gs.screen().hasTextBox && !ctx.gs.screen().cursor) tap(ctx, 'A', 8); else ctx.emu.frame();
     }
+    // a trainer's battle can start a moment after its text closes
+    for (let i = 0; i < 90 && ctx.gs.mapId === mapBefore && !ctx.gs.inBattle; i++) ctx.emu.frame();
     if (ctx.gs.mapId === mapBefore && !ctx.gs.inBattle) {
       const k = `${mapNameBefore}:${c.key}`;
       ctx.mem.blockedExits[k] = (ctx.mem.blockedExits[k] ?? 0) + 1;
-      ctx.log('info', `${c.key}: did not get through (${ctx.mem.blockedExits[k]}x)`);
+      ctx.log('info', `${c.key}: did not get through (${ctx.mem.blockedExits[k]}x, walk ${res}, at ${ctx.gs.x},${ctx.gs.y})`);
     }
   }
 }
