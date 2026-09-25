@@ -123,7 +123,10 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   let opts = readMenuOptions(ctx);
   // "Bring out which POKéMON?" in battle: fainted Pokémon can't be sent out, so they aren't options
   if (ctx.gs.inBattle && isPartyMenu(ctx)) {
-    const alive = opts.filter((o) => (ctx.gs.party()[o.index ?? -1]?.hp ?? 1) > 0);
+    // (nor the one already out: "already in battle" just brings the menu back)
+    const active = ctx.gs.battle().player?.slot;
+    const activeUp = active !== undefined && (ctx.gs.party()[active]?.hp ?? 0) > 0;
+    const alive = opts.filter((o) => (ctx.gs.party()[o.index ?? -1]?.hp ?? 1) > 0 && !(activeUp && o.index === active));
     if (alive.length) opts = alive;
   }
   if (!opts.length) return null;
