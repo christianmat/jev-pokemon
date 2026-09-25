@@ -132,11 +132,23 @@ async function decideBattle(ctx: Ctx) {
     actions['Run away'] = () => select(ctx, 'RUN');
   }
 
+  // Pokémon Tower without the SILPH SCOPE: the wild enemy shows only as "GHOST" and the player's Pokémon are too
+  // scared to move (the game's IsGhostBattle rule). Report what the player sees, not the hidden species.
+  const ghost = gs.inBattle === 1 && /^POKEMON_TOWER_[1-7]F$/.test(gs.mapName) && !gs.bag().some((i) => i.name === 'SILPH SCOPE');
+  if (ghost) {
+    for (const k of Object.keys(opts)) {
+      if (k.startsWith('Use ') && !/: 0 PP left/.test(opts[k])) opts[k] = `${k.slice(4)}: the enemy is an unidentified GHOST and your Pokémon is too scared to move, so this does nothing.`;
+      if (k.startsWith('Switch to ')) opts[k] = `${k}: any Pokémon is too scared to move against an unidentified GHOST. Switching uses the turn.`;
+      if (k.startsWith('Throw ')) opts[k] = 'The unidentified GHOST dodges thrown balls: it cannot be caught.';
+    }
+    if (opts['Run away']) opts['Run away'] = `Flee from the unidentified GHOST. Speed ${me.spd}.`;
+  }
+  const enemyShown = ghost ? { species: 'GHOST (unidentified)', level: b.enemy.level } : { ...b.enemy, speed: foe.spd, attack: foe.atk, defense: foe.def, special: foe.spc };
   const state = {
     ...situation(ctx),
     battle: {
       kind: b.kind,
-      enemy: { ...b.enemy, speed: foe.spd, attack: foe.atk, defense: foe.def, special: foe.spc },
+      enemy: enemyShown,
       enemyTrainerPokemonCount: b.kind === 'trainer' ? b.enemyPartyCount : undefined,
       active: { name: party[b.player.slot]?.nickname, species: b.player.species, level: b.player.level, hp: `${b.player.hp}/${b.player.maxHp}`, status: b.player.status, types: b.player.types, speed: me.spd },
     },
@@ -145,8 +157,9 @@ async function decideBattle(ctx: Ctx) {
     ? "The player's current focus is catching new Pokémon."
     : 'Choose the best action for this battle.';
   const key = await ctx.jev.choose('battle', { ...state, currentFocus: focus }, `You are in a Pokémon battle. ${goal}`, opts);
-  remember(ctx.mem.actions, `battle vs ${b.enemy.species}: ${key}`, 12);
-  ctx.log('decision', `battle vs ${b.enemy.species} Lv${b.enemy.level}: ${key}`);
+  const shownName = ghost ? 'GHOST' : b.enemy.species;
+  remember(ctx.mem.actions, `battle vs ${shownName}: ${key}`, 12);
+  ctx.log('decision', `battle vs ${shownName} Lv${b.enemy.level}: ${key}`);
   actions[key]();
 }
 
