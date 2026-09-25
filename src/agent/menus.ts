@@ -249,11 +249,15 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   const repeats = (menuRepeats.get(seenKey) ?? 0) + 1;
   menuRepeats.set(seenKey, repeats);
   if (menuRepeats.size > 200) menuRepeats.clear();
-  const prevExplore = ctx.jev.explore;
-  if (repeats >= 3) ctx.jev.explore = true; // same menu keeps coming back → sample instead of repeating
+  // same menu keeps coming back (the answers aren't getting anywhere): back out of the menus entirely
+  if (repeats >= 5) {
+    ctx.log('info', `menu came back ${repeats} times → backing out`);
+    menuRepeats.delete(seenKey);
+    for (let i = 0; i < 10 && (ctx.gs.screen().cursor || ctx.gs.screen().hasTextBox); i++) tap(ctx, 'B', 20);
+    return CLOSE;
+  }
   const focus = ctx.mem.intent?.value;
   const choice = await ctx.jev.choose(purpose, { ...situation(ctx), currentFocus: focus, screen: screenText }, `A menu is open on screen.${focus ? ` The player's current focus is: ${focus}.` : ''} Which option best serves that focus and the objective?${/BUY|MONEY/.test(screenText) ? ` Money: ¥${ctx.gs.money}.` : ' Item rule: only use an item where it actually works (Poké Balls only in wild battles, healing items only on hurt Pokémon, TMs/HMs to teach moves outside battle).'} Rule: if this same menu keeps coming back after your answer, your last answer isn't working — choose a different option.${repeats >= 2 ? ` This exact menu has appeared ${repeats} times.` : ''}`, criteria);
-  ctx.jev.explore = prevExplore;
   remember(ctx.mem.actions, `menu[${opts.map((o) => o.text).join('|')}] -> ${choice}`, 12);
   ctx.log('decision', `menu → ${choice}`, { options: opts.map((o) => o.text) });
   if (/^(TM|HM)\d\d$/.test(choice)) ctx.mem.lastItem = choice;
