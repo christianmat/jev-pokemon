@@ -539,7 +539,9 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   // wild battles made the focus flip between progress and heal and walk back and forth.
   const hpFrac = party.reduce((a, p) => a + p.hp, 0) / Math.max(1, party.reduce((a, p) => a + p.maxHp, 0));
   const fainted = party.filter((p) => p.hp === 0).length;
-  const key = `${hpFrac < 0.25 ? 'low' : 'ok'}|${fainted}|${party.map((p) => p.level).join(',')}|${gs.badges}|${currentMilestone(gs).index}|${gs.bag().map((i) => i.name).join(',')}|${Math.floor(gs.money / 500)}`;
+  // a single faint (a weak member in a wild fight) doesn't re-ask; half the team down or low total HP does
+  const faintBand = fainted >= Math.ceil(party.length / 2) ? 'many' : 'few';
+  const key = `${hpFrac < 0.25 ? 'low' : 'ok'}|${faintBand}|${party.map((p) => p.level).join(',')}|${gs.badges}|${currentMilestone(gs).index}|${gs.bag().map((i) => i.name).join(',')}|${Math.floor(gs.money / 500)}`;
   // re-ask Jev every FOCUS_TTL overworld decisions even if nothing changed, so a focus can't trap it
   // a finished focus is re-asked (e.g. 'heal' once everyone is at full HP with no status problems)
   const healed = party.every((p) => p.hp === p.maxHp && p.status === 'OK');
