@@ -1,9 +1,8 @@
 # Jev Plays Pokémon Red
 
-[Jev](https://en.wikipedia.org/wiki/Jev_(AI_model)), TypeSafe AI's decision model, plays Pokémon Red. There are no scripts or cheats: the harness reads the game's memory, lists the legal options with some facts about each, and Jev picks one. The game streams live to YouTube, with a panel showing every decision and Jev's probabilities.
+[Jev](https://en.wikipedia.org/wiki/Jev_(AI_model)), TypeSafe AI's decision model, plays Pokémon Red. There are no scripts or cheats: the harness reads the game's memory, lists the legal options with some facts about each, and Jev picks one.
 
-- **Live stream:** https://www.youtube.com/watch?v=4kaC4ZHhw_Q
-- **Landing page:** [`site/`](site/)
+Landing page: [`site/`](site/)
 
 > You need your own legally obtained copy of Pokémon Red. No ROM is included or distributed here. See [Legal](#legal).
 
@@ -37,7 +36,7 @@
 
 ## Setup
 
-Requirements: macOS or Linux, Node 20+, git, and `ffmpeg` if you want to stream.
+Requirements: macOS or Linux, Node 20+, and git.
 
 ```bash
 git clone https://github.com/christianmat/jev-pokemon && cd jev-pokemon
@@ -56,7 +55,6 @@ The ROM must be the US/EU release. Its SHA-1 is `ea9bcae617fdf159b045185467ae58b
 | `JEV_MODE` | `gateway` for real Jev via Vercel AI Gateway, `mock` for a free, dumb stand-in (the default) |
 | `AI_GATEWAY_API_KEY` | Vercel AI Gateway key (`VERCEL_AI_GATEWAY_API_KEY` also works) |
 | `JEV_MIN_INTERVAL_MS`, `JEV_MAX_PER_MIN` | Throttling (defaults 300 ms and 90 per minute) |
-| `YOUTUBE_STREAM_KEY` | Optional. Enables the live stream (or set a full `STREAM_URL`) |
 
 ## Run
 
@@ -68,10 +66,6 @@ npm run headless -- --steps 3000               # max speed, logs only
 npx tsx scripts/tools/save.ts                  # save the running game (writes saves/manual-*.json)
 ```
 
-With `YOUTUBE_STREAM_KEY` set, the bot also streams 1280×720 video: the game at 4× with game audio, plus the Jev panel.
-- **Browser not needed:** ffmpeg runs in the background, so no browser or OBS has to stay open.
-- **Laptop runs:** use `caffeinate -dimsu npm start -- --speed 1 …` on macOS to keep the machine awake.
-
 ### Logs
 
 - `logs/jev-calls.jsonl` has every Jev call: the full state, the options with their facts, the probabilities, and the latency.
@@ -82,7 +76,6 @@ With `YOUTUBE_STREAM_KEY` set, the bot also streams 1280×720 video: the game at
 - **Price:** Jev costs $0.042 per million input tokens, and output is free. A typical call is about 1,200 tokens.
 - **Rate:** at real-time speed the bot makes about 800–1,300 calls an hour. That comes to **about $1–1.70 per 24 hours**.
 - **Ceiling:** the throttle's worst case, 90 calls a minute nonstop, is about $7 a day.
-- **Stream panel:** shows the lifetime token count and cost in USD.
 
 ## Project layout
 
@@ -93,7 +86,6 @@ With `YOUTUBE_STREAM_KEY` set, the bot also streams 1280×720 video: the game at
 | `src/jev/` | Jev client (throttle, cache, log), AI SDK gateway backend, mock |
 | `src/agent/` | mode detection, dialog and menus, overworld, battle, field moves and items |
 | `src/knowledge/` | story milestones |
-| `src/stream/` | headless ffmpeg streamer + Jev panel drawn in the Game Boy font |
 | `src/server/` | runner + local WebSocket viewer |
 | `web/` | local viewer page |
 | `site/` | public landing page (static; deploy with Vercel, root directory `site`) |
@@ -106,7 +98,7 @@ With `YOUTUBE_STREAM_KEY` set, the bot also streams 1280×720 video: the game at
 2. Set **Root Directory** to `site`.
 3. Deploy.
 
-The YouTube video ID and the repo link are in `site/index.html`.
+The video embed and repo link are in `site/index.html`.
 
 ## Legal
 
