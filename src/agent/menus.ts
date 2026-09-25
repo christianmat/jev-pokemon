@@ -170,6 +170,16 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     if (/^(HM|TM)\d\d$/.test(label)) return inBattle ? 'Unusable in battle.' : 'Teaches a move to a Pokémon.';
     return '';
   };
+  // what YES/NO does on the move-learning prompts (the game alternates between them until one is YES)
+  const flat = screenText.replace(/\s*\/\s*/g, ' ');
+  const learn = flat.match(/room for ([A-Z0-9 .'-]+?)\?/) ?? flat.match(/Abandon learning ([A-Z0-9 .'-]+?)\?/);
+  if (learn && /move to make room/.test(flat)) {
+    MENU_FACTS.YES = `Pick one of the current moves to forget; ${learn[1]} takes its place.`;
+    MENU_FACTS.NO = `Don't forget a move; the game then asks whether to give up learning ${learn[1]}.`;
+  } else if (learn && /Abandon learning/.test(flat)) {
+    MENU_FACTS.YES = `Give up on ${learn[1]} and keep the current four moves.`;
+    MENU_FACTS.NO = `Don't give up; the game goes back to asking whether to forget a move to make room for ${learn[1]}.`;
+  }
   for (const o of opts) criteria[o.text] = `Menu option "${o.text}". ${MENU_FACTS[o.text] ?? ''} ${itemRule(o.text)} ${extraFacts(o.text) || partyFacts(o.text)} ${price(o.text)}`.replace(/\s+/g, ' ').trim();
   // Mechanics Jev can always use: scroll a list that has more entries, and back out of any menu.
   const MORE = 'See more items (scroll down)', CLOSE = 'Close this menu';
