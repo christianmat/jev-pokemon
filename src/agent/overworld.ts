@@ -211,7 +211,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const path = sgGoal(px, py) ? [] : findPath(g, px, py, sgGoal, { blocked, maxNodes: 6000 });
     const k = `${gs.mapName}:sign${sg.x},${sg.y}`;
     const said = mem.npcText[k];
-    add(`Read sign at (${sg.x},${sg.y})`, said ? `A sign. It says: "${said.slice(0, 300)}".` : 'A sign, not yet read.', { kind: 'sign', x: sg.x, y: sg.y }, path);
+    if (/ELEVATOR/.test(gs.mapName)) add(`Use the elevator panel at (${sg.x},${sg.y})`, `The elevator's floor-select panel.${said ? ` Last time it said: "${clip(said)}".` : ''}`, { kind: 'sign', x: sg.x, y: sg.y }, path);
+    else add(`Read sign at (${sg.x},${sg.y})`, said ? `A sign. It says: "${said.slice(0, 300)}".` : 'A sign, not yet read.', { kind: 'sign', x: sg.x, y: sg.y }, path);
   }
 
   // Hidden interactables (PCs, switches, statues, trash cans...). Hidden items are excluded: a human wouldn't know them.
