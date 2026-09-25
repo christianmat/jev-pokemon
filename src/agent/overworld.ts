@@ -213,7 +213,10 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const OBJECTS: Record<string, string> = { POKE_BALL: 'a Poké Ball object', FOSSIL: 'a fossil lying on the ground', BOULDER: 'a boulder', POKEDEX: 'a Pokédex on a table', CLIPBOARD: 'a clipboard', PAPER: 'a piece of paper', OLD_AMBER: 'an amber stone', SNORLAX: 'a sleeping Snorlax' };
     const who = obj?.trainerClass ?? spriteName;
     const kind = obj?.item != null ? `an item ball (${rom.items.get(obj.item) ?? 'item'})` : OBJECTS[spriteName] ?? (obj?.trainer ? `a trainer (${who})` : `a person (${spriteName})`);
-    const facts = `${kind} at (${sp.x},${sp.y}).${said ? ` Last time they said: "${clip(said)}".` : ' Not yet talked to.'}${spriteName === 'NURSE' ? ' Heals the whole party.' : ''}${spriteName === 'CLERK' ? ' Shop clerk: buy items.' : ''}`;
+    // named people from the objective text (e.g. MR_FUJI ~ "Mr. Fuji", GIOVANNI, BILL)
+    const letters = (t: string) => t.toUpperCase().replace(/[^A-Z]/g, '');
+    const inGoal = spriteName.length > 3 && !/^(ROCKET|GIRL|BOY|GUARD|NURSE|CLERK|SUPER_NERD|YOUNGSTER|LASS)$/.test(spriteName) && letters(m?.goal ?? '').includes(letters(spriteName)) ? ' Mentioned in the current objective.' : '';
+    const facts = `${kind} at (${sp.x},${sp.y}).${inGoal}${said ? ` Last time they said: "${clip(said)}".` : ' Not yet talked to.'}${spriteName === 'NURSE' ? ' Heals the whole party.' : ''}${spriteName === 'CLERK' ? ' Shop clerk: buy items.' : ''}`;
     const label = obj?.item != null ? `Pick up item ball at (${sp.x},${sp.y})` : OBJECTS[spriteName] ? `Examine the ${spriteName.toLowerCase().replace(/_/g, ' ')} at (${sp.x},${sp.y})` : `Talk to ${obj?.trainer ? who : spriteName} at (${sp.x},${sp.y})`;
     add(label, blockers.has(sp.index) ? `${facts} ${blockers.get(sp.index)}` : facts, { kind: 'npc', index: sp.index, x: sp.x, y: sp.y, sprite: spriteName }, path);
   }
@@ -676,7 +679,7 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
     team: /Use the PC|Pokémon Center/,
     train: /tall grass/,
     catch: /tall grass/,
-    progress: /Leads toward the objective|objective is in this place|objective takes place/,
+    progress: /Leads toward the objective|objective is in this place|objective takes place|Mentioned in the current objective/,
   };
   for (const c of pool) {
     const n = tried[tk(c)] ?? 0;
