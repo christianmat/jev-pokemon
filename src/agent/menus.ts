@@ -120,7 +120,12 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     last = now;
     ctx.emu.frame();
   }
-  const opts = readMenuOptions(ctx);
+  let opts = readMenuOptions(ctx);
+  // "Bring out which POKéMON?" in battle: fainted Pokémon can't be sent out, so they aren't options
+  if (ctx.gs.inBattle && isPartyMenu(ctx)) {
+    const alive = opts.filter((o) => (ctx.gs.party()[o.index ?? -1]?.hp ?? 1) > 0);
+    if (alive.length) opts = alive;
+  }
   if (!opts.length) return null;
   // Party screen for an item/TM: the game marks each Pokémon ABLE / NOT ABLE. If nobody is able, back out.
   const ableRows = isPartyMenu(ctx) ? ctx.gs.party().map((_, i) => ctx.gs.screen().rows[i * 2 + 1] ?? '') : [];
