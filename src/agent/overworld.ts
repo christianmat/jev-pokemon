@@ -548,6 +548,7 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   lastMapWasMart = false; // one-shot: only the first decision after leaving a Mart
   const done = (ctx.mem.intent?.value === 'heal' && healed) || leftMart || (ctx.mem.intent?.value === 'shop' && !!ctx.mem.shopDone) || (ctx.mem.intent?.value === 'team' && !!ctx.mem.pcDone);
   if (done && ctx.mem.intent?.value === 'team') ctx.mem.teamSig = teamSignature(ctx);
+  if (done && ctx.mem.intent?.value === 'shop') ctx.mem.shopMoney = gs.money;
   if (done) { ctx.mem.shopDone = false; ctx.mem.pcDone = false; }
   if (!done && ctx.mem.intent?.key === key && (ctx.mem.intent.age = (ctx.mem.intent.age ?? 0) + 1) <= FOCUS_TTL) return ctx.mem.intent.value;
   const balls = gs.bag().filter((i) => /BALL$/.test(i.name)).reduce((a, i) => a + i.qty, 0);
@@ -556,7 +557,8 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   criteria.catch = `${INTENTS.catch} Team size ${party.length}/6. Poké Balls in bag: ${balls}.${weakNote ? ` ${weakNote}` : ''}`;
   criteria.shop = `${INTENTS.shop} Money: ¥${gs.money}. Prices: Poké Ball ¥200, Potion ¥300, Antidote ¥100.`;
   // impossible focuses aren't offered (same rule as unusable items)
-  if (gs.money < 100) delete (criteria as Record<string, string>).shop;
+  // shop is offered when there's money to spend: ¥100+, and ¥200+ more than when the last shop visit ended
+  if (gs.money < 100 || (ctx.mem.shopMoney !== undefined && gs.money < ctx.mem.shopMoney + 200)) delete (criteria as Record<string, string>).shop;
   if (balls === 0 && gs.money < 200) delete (criteria as Record<string, string>).catch;
   criteria.heal = `${INTENTS.heal} Healing at a Pokémon Center is free.`;
   // loop rule: the same team lost everything at the same place 2+ times -> 'progress' comes back once the team changes
