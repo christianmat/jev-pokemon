@@ -15,9 +15,9 @@ export function isNamingScreen(ctx: Ctx): boolean {
 /** Types a name on the naming keyboard by reading letter positions off the screen. */
 export function typeName(ctx: Ctx, name: string) {
   const rows = () => ctx.gs.screen().rows;
-  // Only type if the name field is empty (otherwise accept what's there)
-  const nameRow = rows().findIndex((r) => /NAME\?/.test(r));
-  const typed = nameRow >= 0 ? rows()[nameRow + 1]?.trim() ?? '' : '';
+  // Only type if the name field is empty (otherwise accept what's there). The field is row 2 from column 10
+  // on both the player/rival and the nickname screens (naming_screen.asm).
+  const typed = (rows()[2] ?? '').slice(10).trim();
   if (typed.replace(/[_\s]/g, '')) { tap(ctx, 'START', 20); return; }
   for (const ch of name) {
     for (let i = 0; i < 20; i++) {
@@ -44,7 +44,9 @@ const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 /** Jev picks a nickname letter by letter (A–Z or DONE), then it's typed on the keyboard. */
 export async function spellNickname(ctx: Ctx) {
   const rows = ctx.gs.screen().rows;
-  const species = (rows.find((r) => /NICKNAME/.test(r)) ?? '').replace(/'S.*$|NICKNAME.*$/i, '').replace(/[^A-Z0-9♂♀.\- ]/g, '').trim() || 'the new Pokémon';
+  const speciesTypes = (() => { const sp = [...ctx.rom.species.values()].find((x) => x.name === (rows[1] ?? '').slice(4).trim()); return sp ? sp.types.join('/') : ''; })();
+  // the species name is printed on row 1 from column 4
+  const species = (rows[1] ?? '').slice(4).replace(/[^A-Z0-9♂♀.\- ]/g, '').trim() || 'the new Pokémon';
   // the name must be made up: not a species name, not a nickname already in use (party or current PC box)
   const taken = new Set<string>([...ctx.rom.species.values()].map((sp) => sp.name));
   for (const p of ctx.gs.party()) taken.add(p.nickname);
@@ -54,10 +56,17 @@ export async function spellNickname(ctx: Ctx) {
   for (let guard = 0; guard < 40 && name.length <= MAX_NICK; guard++) {
     if (name.length === MAX_NICK) { if (!taken.has(name)) break; name = name.slice(0, -1); } // full but taken: change the end
     const options: Record<string, string> = {};
-    for (const l of LETTERS) options[l] = `Name becomes "${name}${l}".${taken.has(name + l) ? ' That is an existing Pokémon name or nickname, so it cannot be the final name.' : ''}`;
+    // shuffled, so the list order doesn't favor A, B, C...
+    for (const l of [...LETTERS].sort(() => Math.random() - 0.5)) options[l] = `Name becomes "${name}${l}".${taken.has(name + l) ? ' That is an existing Pokémon name or nickname, so it cannot be the final name.' : ''}`;
     if (name && !taken.has(name)) options.DONE = `Finish: the nickname is "${name}".`;
-    const pick = await ctx.jev.choose('nickname', { species, nameSoFar: name, lettersLeft: MAX_NICK - name.length },
-      `Give ${species} a nickname, one letter at a time. Rule: it must be a new, made-up name, not the name of any Pokémon species and not a nickname already in use. Name so far: "${name}". Pick the next letter${options.DONE ? ', or DONE to finish' : ''}. Up to ${MAX_NICK} letters.`, options);
+    const { answers } = await ctx.jev.ask('nickname', { species, types: speciesTypes, nameSoFar: name, lettersLeft: MAX_NICK - name.length }, {
+      letter: { type: 'choice', criteria: options,
+        instructions: `Give ${species}${speciesTypes ? ` (${speciesTypes} type)` : ''} a nickname, one letter at a time. Rule: it must be a new, made-up name, not the name of any Pokémon species and not a nickname already in use. Name so far: "${name}". Pick the next letter${options.DONE ? ', or DONE to finish' : ''}. Up to ${MAX_NICK} letters.` },
+    });
+    // draw from Jev's distribution (the top choice alone tends to spell the alphabet in order)
+    const probs = Object.entries(((answers as any)?.letter?.probabilities ?? {}) as Record<string, number>).filter(([k]) => k in options);
+    let r = Math.random() * probs.reduce((a, [, p]) => a + p, 0), pick = probs[0]?.[0] ?? 'DONE';
+    for (const [k, p] of probs) { r -= p; if (r <= 0) { pick = k; break; } }
     if (pick === 'DONE') break;
     if (LETTERS.includes(pick)) name += pick;
   }
