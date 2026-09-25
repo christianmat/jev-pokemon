@@ -559,6 +559,8 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
   busyWaited = 0;
   if (ctx.gs.mapId !== lastDecisionMap) {
     lastMapWasMart = /MART/.test(mapName(lastDecisionMap));
+    // gym trash-can switches are re-placed on every entry: earlier findings no longer hold
+    for (const h of ctx.rom.hidden.get(ctx.gs.mapId) ?? []) if (/GymTrash/.test(h.fn)) delete ctx.mem.npcText[`${ctx.gs.mapName}:hidden${h.x},${h.y}`];
     settleAfterMapChange(ctx);
     lastDecisionMap = ctx.gs.mapId;
     if (agent.mode() !== 'overworld') return; // a script/dialog started while arriving

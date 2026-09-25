@@ -59,6 +59,11 @@ export async function dialogStep(ctx: Ctx, purpose = 'dialog-menu') {
         if (talk.length && line.startsWith(talk[talk.length - 1])) talk[talk.length - 1] = line; else talk.push(line);
       }
       ctx.mem.npcText[k] = talk.join(' ').slice(-1500);
+      // a reset puzzle (e.g. electric locks) makes what other objects here showed before out of date
+      if (/were reset/.test(line ?? '')) {
+        const prefix = k.slice(0, k.indexOf(':hidden') + 7);
+        if (prefix.endsWith(':hidden')) for (const o of Object.keys(ctx.mem.npcText)) if (o !== k && o.startsWith(prefix)) delete ctx.mem.npcText[o];
+      }
     }
   }
   // Options screen: configure once (fast text, no battle animations), then leave.
