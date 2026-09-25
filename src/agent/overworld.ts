@@ -104,6 +104,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
 
   // Warps (dedupe adjacent warps with the same destination)
   const seenWarp = new Map<string, Candidate>();
+  const blockers = new Map<number, string>(); // sprite index -> fact
   const lastMap = gs.u8('wLastMap');
   (md?.warps ?? []).forEach((w, wi) => {
     // LAST_MAP warps: resolve from the ROM (which map warps into this door), not from wLastMap
@@ -116,19 +117,13 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const k = `${dest}|${destRegions.join(',')}`;
     const blockedExceptThis = new Set(blocked); blockedExceptThis.delete(`${w.x},${w.y}`);
     const path = px === w.x && py === w.y ? [] : findPath(g, px, py, (x, y) => x === w.x && y === w.y, { blocked: blockedExceptThis, surf });
-    // exit only unreachable because a person stands in the way → offer walking up to them
+    // exit only unreachable because a person stands in the way → record that as a plain fact on that person
     if (!path) {
       const free = new Set(warpSquares); free.delete(`${w.x},${w.y}`);
       const open = findPath(g, px, py, (x, y) => x === w.x && y === w.y, { blocked: free, surf });
       const stopAt = open?.find((st) => blockedSquares(ctx).has(`${st.x},${st.y}`));
       const person = stopAt && gs.sprites().find((sp) => !sp.hidden && sp.x === stopAt.x && sp.y === stopAt.y);
-      if (open && person) {
-        const who = SPRITES[person.picture] ?? 'someone';
-        const ig = interactGoal(g, person.x, person.y);
-        const toPerson = ig(px, py) ? [] : findPath(g, px, py, ig, { blocked, maxNodes: 6000 });
-        const name = mapName(dest);
-        add(`Get past ${who} at (${person.x},${person.y}) toward ${name}`, `The only path to the exit to ${name} is blocked by ${who} standing at (${person.x},${person.y}). Walk up and talk to them (trainers will battle; some people step aside afterwards). ${routeFacts(dest, destRegions)}`, { kind: 'npc', index: person.index, x: person.x, y: person.y, sprite: who }, toPerson);
-      }
+      if (open && person) blockers.set(person.index, `Standing in the only path to the exit to ${mapName(dest)}.`);
       return;
     }
     // merge doors that lead to the same place — but only reachable ones, keeping the nearest
@@ -171,7 +166,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const kind = obj?.item != null ? `an item ball (${rom.items.get(obj.item) ?? 'item'})` : spriteName === 'POKE_BALL' ? 'a Poké Ball object' : obj?.trainer ? `a trainer (${spriteName})` : `a person (${spriteName})`;
     const facts = `${kind} at (${sp.x},${sp.y}).${said ? ` Last time they said: "${said.slice(0, 300)}".` : ' Not yet talked to.'}${spriteName === 'NURSE' ? ' Heals the whole party.' : ''}${spriteName === 'CLERK' ? ' Shop clerk: buy items.' : ''}`;
     const label = obj?.item != null ? `Pick up item ball at (${sp.x},${sp.y})` : `Talk to ${spriteName} at (${sp.x},${sp.y})`;
-    add(label, facts, { kind: 'npc', index: sp.index, x: sp.x, y: sp.y, sprite: spriteName }, path);
+    add(label, blockers.has(sp.index) ? `${facts} ${blockers.get(sp.index)}` : facts, { kind: 'npc', index: sp.index, x: sp.x, y: sp.y, sprite: spriteName }, path);
   }
 
   // Signs
@@ -410,7 +405,7 @@ const MAX_REPEATS_NO_PROGRESS = +(process.env.MAX_REPEATS_NO_PROGRESS ?? 5);
 
 const INTENTS: Record<string, string> = {
   progress: 'Move toward the current objective now.',
-  heal: 'Go heal the party at a Pokémon Center first (HP low or Pokémon fainted).',
+  heal: 'Go heal the party at a Pokémon Center.',
   train: 'Train: fight wild Pokémon in tall grass to gain levels before the objective.',
   catch: 'Catch new wild Pokémon to build a stronger, more varied team.',
   shop: 'Buy supplies (Poké Balls, Potions) at a Poké Mart.',
@@ -426,7 +421,7 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   if (ctx.mem.intent?.key === key) return ctx.mem.intent.value;
   const balls = gs.bag().filter((i) => /BALL$/.test(i.name)).reduce((a, i) => a + i.qty, 0);
   const criteria = { ...INTENTS };
-  criteria.catch = `${INTENTS.catch} Your team has ${party.length} Pokémon${party.length === 1 ? ' — if it faints you lose the battle, and there are no type options to switch to' : ''}. You have ${balls} Poké Ball(s)${balls ? '' : ' (buy some first)'}.`;
+  criteria.catch = `${INTENTS.catch} Team size ${party.length}/6. Poké Balls in bag: ${balls}.`;
   const { picked } = await ctx.jev.ask('intent', situation(ctx), {
     intent: { type: 'choice', instructions: 'You are playing Pokémon Red. Given the objective, the party\'s health and levels (vs the typical opponent level of the objective), money and items, what should the player focus on right now?', criteria },
   });

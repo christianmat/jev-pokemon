@@ -88,7 +88,7 @@ async function decideBattle(ctx: Ctx) {
       const key = `Throw ${it.name}`;
       const dex = [...rom.species.values()].find((sp) => sp.name === b.enemy.species)?.dex ?? 0;
       const isNew = dex && !gs.owned(dex) ? `NEW species you don't own yet. ` : 'You already own this species. ';
-      const small = party.length < 3 ? `Your team has only ${party.length} Pokémon — catching adds a team member. ` : '';
+      const small = `Team size ${party.length}/6. `;
       const pc = Math.round(100 * catchChance(it.name, b.enemy.catchRate, b.enemy.hp, b.enemy.maxHp, b.enemy.status));
       opts[key] = `Estimated catch chance ~${pc}% per ${it.name} right now. ${isNew}${small}Try to catch the wild ${b.enemy.species} (Lv${b.enemy.level}, ${b.enemy.types.join('/')}, catch rate ${b.enemy.catchRate}/255, HP ${b.enemy.hp}/${b.enemy.maxHp}, status ${b.enemy.status}). Lower HP and sleep/paralysis make catching easier. Party size ${party.length}/6. ${it.qty} left.`;
       actions[key] = () => { if (!select(ctx, 'ITEM')) return; if (cursorTo(ctx, it.name)) confirmA(ctx); else tap(ctx, 'B', 20); };
@@ -110,8 +110,8 @@ async function decideBattle(ctx: Ctx) {
     },
   };
   const goal = b.kind === 'wild' && catching
-    ? "The player's current focus is CATCHING new Pokémon: a wild battle is the chance to catch this one (weaken it without knocking it out, then throw balls). Knocking it out means it can't be caught."
-    : 'Choose the action most likely to win this battle while avoiding losing your Pokémon.';
+    ? "The player's current focus is catching new Pokémon."
+    : 'Choose the best action for this battle.';
   const key = await ctx.jev.choose('battle', { ...state, currentFocus: focus }, `You are in a Pokémon battle. ${goal}`, opts);
   remember(ctx.mem.actions, `battle vs ${b.enemy.species}: ${key}`, 12);
   ctx.log('decision', `battle vs ${b.enemy.species} Lv${b.enemy.level}: ${key}`);
