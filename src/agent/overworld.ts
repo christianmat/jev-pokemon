@@ -353,6 +353,7 @@ export async function execute(ctx: Ctx, c: Candidate, agent: Agent): Promise<voi
     const again = buildCandidates(ctx).find((k) => k.key === c.key);
     if (again) res = walk(ctx, again.path);
   }
+  if (res === 'interrupted') { pendingTarget = { map: gs.mapId, key: c.key, resumes: resumingCount + 1 }; return; }
   if (res !== 'ok') return;
   switch (t.kind) {
     case 'warp': {
@@ -492,6 +493,9 @@ function settleAfterMapChange(ctx: Ctx) {
 }
 
 let lastDecisionMap = -1;
+// a walk Jev chose that got interrupted (battle/dialog): resume it instead of re-asking
+let pendingTarget: { map: number; key: string; resumes: number } | null = null;
+let resumingCount = 0;
 let lastHops = Infinity;
 
 export async function overworldStep(ctx: Ctx, agent: Agent) {
@@ -500,6 +504,19 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
     lastDecisionMap = ctx.gs.mapId;
     if (agent.mode() !== 'overworld') return; // a script/dialog started while arriving
   }
+  // resume Jev's interrupted choice (same map, still available, at most 3 times)
+  if (pendingTarget && pendingTarget.map === ctx.gs.mapId && pendingTarget.resumes <= 3) {
+    const again = buildCandidates(ctx).find((k) => k.key === pendingTarget!.key);
+    if (again) {
+      ctx.log('info', `resuming "${again.key}" after an interruption (${pendingTarget.resumes}/3)`);
+      resumingCount = pendingTarget.resumes;
+      pendingTarget = null;
+      await execute(ctx, again, agent);
+      resumingCount = 0;
+      return;
+    }
+  }
+  pendingTarget = null;
   const intent = await decideIntent(ctx);
   const cands = buildCandidates(ctx);
   if (!cands.length) {
