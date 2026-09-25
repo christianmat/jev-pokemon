@@ -1,5 +1,5 @@
 import type { Ctx } from './context.js';
-import { tap, situation, regionGraph } from './context.js';
+import { tap, situation, regionGraph, weakTeamNote } from './context.js';
 import type { Agent } from './agent.js';
 import { buildGrid, findPath, DIRS, type Dir, type Grid, type Step } from '../game/world.js';
 import { sym, mapName } from '../game/symbols.js';
@@ -550,7 +550,8 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   if (!done && ctx.mem.intent?.key === key && (ctx.mem.intent.age = (ctx.mem.intent.age ?? 0) + 1) <= FOCUS_TTL) return ctx.mem.intent.value;
   const balls = gs.bag().filter((i) => /BALL$/.test(i.name)).reduce((a, i) => a + i.qty, 0);
   const criteria = { ...INTENTS };
-  criteria.catch = `${INTENTS.catch} Team size ${party.length}/6. Poké Balls in bag: ${balls}.`;
+  const weakNote = weakTeamNote(ctx);
+  criteria.catch = `${INTENTS.catch} Team size ${party.length}/6. Poké Balls in bag: ${balls}.${weakNote ? ` ${weakNote}` : ''}`;
   criteria.shop = `${INTENTS.shop} Money: ¥${gs.money}. Prices: Poké Ball ¥200, Potion ¥300, Antidote ¥100.`;
   // impossible focuses aren't offered (same rule as unusable items)
   if (gs.money < 100) delete (criteria as Record<string, string>).shop;
@@ -573,7 +574,7 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   // offered only when there's something in the box, and the team/box changed since the PC was last used
   if (box.length && ctx.mem.teamSig !== teamSignature(ctx)) {
     const lvls = party.map((p) => p.level);
-    criteria.team = `${INTENTS.team} In the box: ${box.map((m) => `${m.nickname} (${m.species} Lv${m.level}, ${m.types.join('/')})`).join(', ')}. Team: ${party.map((p) => `${p.nickname} (${p.species} Lv${p.level}, ${p.types.join('/')})`).join(', ')}. Team levels range ${Math.min(...lvls)}-${Math.max(...lvls)}.`;
+    criteria.team = `${INTENTS.team}${weakNote ? ` ${weakNote}` : ''} In the box: ${box.map((m) => `${m.nickname} (${m.species} Lv${m.level}, ${m.types.join('/')})`).join(', ')}. Team: ${party.map((p) => `${p.nickname} (${p.species} Lv${p.level}, ${p.types.join('/')})`).join(', ')}. Team levels range ${Math.min(...lvls)}-${Math.max(...lvls)}.`;
   } else delete (criteria as Record<string, string>).team;
   criteria.train = `${INTENTS.train} Beating trainers also earns money.`;
   const { picked } = await ctx.jev.ask('intent', situation(ctx), {
