@@ -344,10 +344,21 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   return out;
 }
 
-type WalkResult = 'ok' | 'blocked' | 'interrupted' | 'warped';
+type WalkResult = 'ok' | 'blocked' | 'interrupted' | 'warped' | 'moved';
 
 function waitWalkDone(ctx: Ctx) {
   for (let i = 0; i < 30 && ctx.emu.mem[sym('wWalkCounter')] !== 0; i++) ctx.emu.frame();
+}
+
+/** Wait until the game hands control back for a while (the flags drop briefly between arrow tiles). False if a battle/text started. */
+function waitControl(ctx: Ctx): boolean {
+  const { gs, emu } = ctx;
+  for (let f = 0, calm = 0; f < 1200 && calm < 16; f++) {
+    emu.frame();
+    if (gs.inBattle || gs.screen().hasTextBox) return false;
+    calm = (gs.joyIgnore & 0xf0) || (gs.u8('wStatusFlags5') & 0x80) || emu.mem[sym('wWalkCounter')] !== 0 ? 0 : calm + 1;
+  }
+  return true;
 }
 
 /** Execute path steps. Stops on map change, text box, battle, or blockage. */
@@ -368,17 +379,22 @@ function walk(ctx: Ctx, path: Step[]): WalkResult {
     if (st.jump) emu.wait(20);
     if (st.spin) {
       // arrow tile: the game moves the player for us; wait it out, then make sure we landed as predicted
-      for (let f = 0; f < 600 && ((gs.joyIgnore & 0xf0) || (gs.u8('wStatusFlags5') & 0x80) || emu.mem[sym('wWalkCounter')] !== 0); f++) emu.frame();
-      emu.wait(10);
-      if (gs.x !== st.x || gs.y !== st.y) return 'blocked'; // replan from wherever we are
+      if (!waitControl(ctx)) return 'interrupted';
+      if (gs.mapId !== map0) { settleAfterMapChange(ctx); return 'warped'; }
+      if (gs.x !== st.x || gs.y !== st.y) return 'moved'; // landed elsewhere: replan from here
       continue;
     }
     const steps = (ctx.mem.stepsInMap[gs.mapName] ??= new Set());
     steps.add(`${gs.x},${gs.y}`);
     if (gs.mapId !== map0) { settleAfterMapChange(ctx); return 'warped'; }
     if (gs.inBattle || gs.screen().hasTextBox) return 'interrupted';
-    // a script took control of the player (e.g. a trainer spotted us and is walking over)
-    if (!moved && ((gs.joyIgnore & 0xf0) || (gs.u8('wStatusFlags5') & 0x80))) return 'interrupted';
+    // the game took control of the player: a trainer walking over, or an arrow tile sliding us along
+    if (!moved && ((gs.joyIgnore & 0xf0) || (gs.u8('wStatusFlags5') & 0x80))) {
+      if (!waitControl(ctx)) return 'interrupted';
+      if (gs.inBattle || gs.screen().hasTextBox || gs.u8('wCurOpponent')) return 'interrupted';
+      if (gs.mapId !== map0) { settleAfterMapChange(ctx); return 'warped'; }
+      return 'moved'; // silently moved somewhere else: replan
+    }
     if (!moved) return 'blocked';
   }
   return 'ok';
@@ -400,12 +416,16 @@ export async function execute(ctx: Ctx, c: Candidate, agent: Agent): Promise<Wal
   const { gs, emu } = ctx;
   const t = c.target;
   let res = walk(ctx, c.path);
-  if (res === 'blocked') {
-    // someone stepped in the way — replan once to the same target
-    emu.wait(20);
+  // replan to the same target from wherever we ended up: someone stepped in the way (once),
+  // or arrow tiles etc. slid us somewhere (keep going)
+  let blockedRetries = 1;
+  for (let i = 0; i < 12 && (res === 'moved' || (res === 'blocked' && blockedRetries-- > 0)); i++) {
+    if (res === 'blocked') emu.wait(20);
     const again = buildCandidates(ctx).find((k) => k.key === c.key);
-    if (again) res = walk(ctx, again.path);
+    if (!again) break;
+    res = walk(ctx, again.path);
   }
+  if (res === 'moved') return res;
   if (res === 'interrupted') { pendingTarget = { map: gs.mapId, key: c.key, resumes: resumingCount + 1 }; return res; }
   if (res !== 'ok') return res;
   switch (t.kind) {
