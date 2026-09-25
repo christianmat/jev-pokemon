@@ -72,7 +72,7 @@ function updateOverlay(r?: { n: number; purpose: string; picked: Record<string, 
   // "SPECIES (NICK)" when it has a nickname; stats right-aligned so the columns line up
   for (const p of st.party) {
     const nm = p.name && p.name !== p.species ? `${p.species} (${p.name})` : p.species;
-    const stats = `Lv${String(p.level).padEnd(3)}${String(p.hp).padStart(3)}/${p.maxHp}`;
+    const stats = `Lv${String(p.level).padEnd(3)}${String(p.hp).padStart(3)}/${String(p.maxHp).padEnd(3)}`;
     lines.push(`${nm.slice(0, Math.max(10, W - stats.length - 1)).padEnd(Math.max(10, W - stats.length - 1))} ${stats}`);
   }
   if (r) {
