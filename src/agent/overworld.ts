@@ -152,7 +152,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     if (prev && prev.path.length <= path.length) return;
     if (prev) out.splice(out.indexOf(prev), 1);
     const name = mapName(dest);
-    const heal = /POKECENTER/.test(name) ? ' A Pokémon Center: the nurse heals the whole party for free.' : /MART/.test(name) ? ' A Poké Mart: buy items.' : /GYM/.test(name) ? ' A Pokémon Gym.' : '';
+    const heal = /POKECENTER/.test(name) ? ' A Pokémon Center: the nurse heals the whole party for free. Healing here also makes it where you return if all your Pokémon faint.' : /MART/.test(name) ? ' A Poké Mart: buy items.' : /GYM/.test(name) ? ' A Pokémon Gym.' : '';
     add(`Enter ${name}`, `Door/stairs/ladder at (${w.x},${w.y}) leading to ${name}.${heal} ${routeFacts(dest, destRegions)}${svc(destRegions)} ${visitFacts(dest)}`, { kind: 'warp', x: w.x, y: w.y, dest }, path);
     seenWarp.set(k, out[out.length - 1]);
   });

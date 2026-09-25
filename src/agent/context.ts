@@ -73,6 +73,14 @@ export function situation(ctx: Ctx) {
     partyHealth: maxHp ? `${Math.round((100 * hp) / maxHp)}% total HP, ${party.filter((p) => p.hp === 0).length} fainted` : 'no Pokémon',
     strongestLevel: Math.max(0, ...party.map((p) => p.level)),
     teamSize: `${party.length}/6`,
+    // type-chart facts: how each team member matches up against the objective's opponents
+    teamVsObjective: m?.types ? party.map((p) => {
+      const eff = (t: string) => Math.max(0, ...p.moves.filter((mv) => mv.power > 0).map((mv) => ctx.rom.effectiveness(mv.type, [t])));
+      const best = Math.max(...m.types!.map(eff));
+      const threat = Math.max(...m.types!.map((t) => ctx.rom.effectiveness(t, p.types)));
+      const word = (x: number) => (x === 0 ? 'no effect' : x >= 2 ? `super effective x${x}` : x < 1 ? `not very effective x${x}` : 'normal effectiveness');
+      return `${p.species} Lv${p.level}: best move vs ${m.types!.join('/')} is ${word(best)}; ${m.types!.join('/')} moves are ${word(threat)} against it`;
+    }) : undefined,
     // where the player reappears if every Pokémon faints (the last Pokémon Center used); losing also halves money
     returnPointIfAllFaint: `Pokémon Center in ${mapName(gs.u8('wLastBlackoutMap'))}`,
     pokeBalls: gs.bag().filter((i) => /BALL$/.test(i.name)).reduce((a, i) => a + i.qty, 0),
