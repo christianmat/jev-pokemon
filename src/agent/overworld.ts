@@ -65,10 +65,15 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   const objMaps = (m?.maps ?? []).map((n) => Object.entries((gen as any).maps).find(([, v]: any) => v.name === n)?.[0]).filter(Boolean).map(Number);
   // exits that stopped us at least twice are left out of route distances until one works again
   const skip = new Set(Object.entries(mem.blockedEdges ?? {}).filter(([, n]) => n >= 2).map(([e]) => e));
-  const dist = rg.distancesTo(objMaps.flatMap((id) => rg.regionsOf(id)), skip);
+  // the objective's area: a specific spot when the milestone gives one (a map can have unconnected parts)
+  const atMap = m?.at ? objMaps.find((id) => mapName(id) === m.at!.map) : undefined;
+  const atRegion = atMap !== undefined ? rg.regionAt(atMap, m!.at!.x, m!.at!.y) : null;
+  const objRegions = atRegion ? [atRegion] : objMaps.flatMap((id) => rg.regionsOf(id));
+  const inObjective = (map: number, regions: (string | null)[]) => (atRegion ? regions.includes(atRegion) : objMaps.includes(map));
+  const dist = rg.distancesTo(objRegions, skip);
   destRegionsByKey.clear();
   const hereRegion = rg.regionAt(gs.mapId, px, py);
-  const hereHops = objMaps.includes(gs.mapId) ? 0 : (hereRegion ? dist.get(hereRegion) : undefined) ?? Infinity;
+  const hereHops = inObjective(gs.mapId, [hereRegion]) ? 0 : (hereRegion ? dist.get(hereRegion) : undefined) ?? Infinity;
   // Getting closer to the objective counts as progress (mazes need back-and-forth without new maps)
   const mi = currentMilestone(gs).index;
   if (isFinite(hereHops) && hereHops < (mem.bestHops[mi] ?? Infinity)) mem.bestHops[mi] = hereHops;
@@ -82,7 +87,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   const used = (k: string) => mem.usedTargets[`${gs.mapName}:${k}`] ?? 0;
 
   const routeFacts = (dest: number, destRegions: string[]) => {
-    if (objMaps.includes(dest)) return 'The objective is in this place (completes objective location).';
+    if (inObjective(dest, destRegions)) return 'The objective is in this place (completes objective location).';
     if (hereHops === 0) return `Leaves the current area (the objective takes place in this area, ${gs.mapName}).`;
     const h = Math.min(Infinity, ...destRegions.map((r) => dist.get(r) ?? Infinity));
     if (!isFinite(h)) return isFinite(hereHops) ? 'Does not lead toward the objective (dead end for now).' : '';
@@ -134,7 +139,15 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       const pref = destRegions.filter((r) => r.startsWith(`${lastMap}:`));
       if (pref.length) destRegions = pref;
     }
-    const dest = w.destMap !== 0xff ? w.destMap : destRegions.length ? +destRegions[0].split(':')[0] : lastMap;
+    let dest = w.destMap !== 0xff ? w.destMap : destRegions.length ? +destRegions[0].split(':')[0] : lastMap;
+    // elevator doors lead wherever the floor panel last set them (live warp table in RAM)
+    if (/ELEVATOR/.test(gs.mapName)) {
+      const base = sym('wWarpEntries') + wi * 4;
+      const liveMap = ctx.emu.mem[base + 3], liveWarp = ctx.emu.mem[base + 2];
+      const t = liveMap !== 0xff ? rom.maps.get(liveMap)?.warps[liveWarp] : undefined;
+      const r = t ? rg.regionAt(liveMap, t.x, t.y) : null;
+      if (r) { dest = liveMap; destRegions = [r]; }
+    }
     const k = `${dest}|${destRegions.join(',')}`;
     const blockedExceptThis = new Set(blocked); blockedExceptThis.delete(`${w.x},${w.y}`);
     const path = px === w.x && py === w.y ? [] : findPath(g, px, py, (x, y) => x === w.x && y === w.y, { blocked: blockedExceptThis, surf });

@@ -140,6 +140,13 @@ export class RegionGraph {
       const r = t && this.regionAt(map, t.x, t.y);
       if (r) res.push(r);
     };
+    // elevators: the floor panel changes where the doors lead; they serve every floor with a door into the elevator
+    if (/ELEVATOR/.test(md.name)) {
+      for (const src of this.rom.maps.values()) src.warps.forEach((sw) => {
+        if (sw.destMap === md.id) { const r = this.regionAt(src.id, sw.x, sw.y); if (r && !res.includes(r)) res.push(r); }
+      });
+      if (res.length) return res;
+    }
     if (w.destMap !== 0xff) land(w.destMap, w.destWarp);
     else for (const src of this.rom.maps.values()) src.warps.forEach((sw) => { if (sw.destMap === md.id && sw.destWarp === wi) land(src.id, w.destWarp); });
     return res;
