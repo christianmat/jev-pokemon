@@ -612,7 +612,9 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
       if (ctx.gs.screen().hasTextBox && !ctx.gs.screen().cursor) tap(ctx, 'A', 8); else ctx.emu.frame();
     }
     // a trainer's battle can start a moment after its text closes
-    for (let i = 0; i < 90 && ctx.gs.mapId === mapBefore && !ctx.gs.inBattle; i++) ctx.emu.frame();
+    for (let i = 0; i < 300 && ctx.gs.mapId === mapBefore && !ctx.gs.inBattle; i++) {
+      if (ctx.gs.screen().hasTextBox && !ctx.gs.screen().cursor) tap(ctx, 'A', 8); else ctx.emu.frame();
+    }
     if (ctx.gs.mapId === mapBefore && !ctx.gs.inBattle) {
       const k = `${mapNameBefore}:${c.key}`;
       ctx.mem.blockedExits[k] = (ctx.mem.blockedExits[k] ?? 0) + 1;
