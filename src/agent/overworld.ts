@@ -452,6 +452,7 @@ const FLOOR_FEATURES: Record<string, { x: number; y: number; kind: 'switch' | 'h
 };
 
 const FOCUS_TTL = 30;
+let lastMapWasMart = false;
 const MAX_REPEATS_NO_PROGRESS = +(process.env.MAX_REPEATS_NO_PROGRESS ?? 5);
 
 const INTENTS: Record<string, string> = {
@@ -476,7 +477,10 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   // re-ask Jev every FOCUS_TTL overworld decisions even if nothing changed, so a focus can't trap it
   // a finished focus is re-asked (e.g. 'heal' once everyone is at full HP with no status problems)
   const healed = party.every((p) => p.hp === p.maxHp && p.status === 'OK');
-  const done = ctx.mem.intent?.value === 'heal' && healed;
+  // 'shop' is done once we've left a Mart (bought or not), so it can't send us straight back in
+  const leftMart = ctx.mem.intent?.value === 'shop' && !/MART/.test(gs.mapName) && lastMapWasMart;
+  lastMapWasMart = false; // one-shot: only the first decision after leaving a Mart
+  const done = (ctx.mem.intent?.value === 'heal' && healed) || leftMart;
   if (!done && ctx.mem.intent?.key === key && (ctx.mem.intent.age = (ctx.mem.intent.age ?? 0) + 1) <= FOCUS_TTL) return ctx.mem.intent.value;
   const balls = gs.bag().filter((i) => /BALL$/.test(i.name)).reduce((a, i) => a + i.qty, 0);
   const criteria = { ...INTENTS };
@@ -517,6 +521,7 @@ const recentHops: number[] = [];
 
 export async function overworldStep(ctx: Ctx, agent: Agent) {
   if (ctx.gs.mapId !== lastDecisionMap) {
+    lastMapWasMart = /MART/.test(mapName(lastDecisionMap));
     settleAfterMapChange(ctx);
     lastDecisionMap = ctx.gs.mapId;
     if (agent.mode() !== 'overworld') return; // a script/dialog started while arriving

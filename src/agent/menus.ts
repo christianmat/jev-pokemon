@@ -154,8 +154,18 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   const price = (label: string) => { const r = screenText.match(new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*/\\s*<ED>(\\d+)')); return r ? `Costs ¥${r[1]}.` : ''; };
   const inBattle = ctx.gs.inBattle !== 0;
   const shopping = /BUY|MONEY/.test(screenText);
+  const SHOP_FACTS: [RegExp, string][] = [
+    [/BALL$/, 'Catches wild Pokémon.'], [/^POTION$/, 'Heals 20 HP.'], [/^SUPER POTION$/, 'Heals 50 HP.'], [/^HYPER POTION$/, 'Heals 200 HP.'],
+    [/^ANTIDOTE$/, 'Cures poison.'], [/^PARLYZ HEAL$/, 'Cures paralysis.'], [/^BURN HEAL$/, 'Cures a burn.'], [/^AWAKENING$/, 'Wakes a sleeping Pokémon.'],
+    [/^ICE HEAL$/, 'Cures freezing.'], [/^FULL HEAL$/, 'Cures any status problem.'], [/^REVIVE$/, 'Revives a fainted Pokémon to half HP.'],
+    [/^ESCAPE ROPE$/, 'Escapes a cave or dungeon.'], [/REPEL$/, 'Keeps weak wild Pokémon away for a while.'],
+  ];
+  const bagQty = (label: string) => ctx.gs.bag().find((i) => i.name === label)?.qty ?? 0;
   const itemRule = (label: string) => {
-    if (shopping) return '';
+    if (shopping) {
+      const f = SHOP_FACTS.find(([re]) => re.test(label))?.[1];
+      return f ? `${f} You have ${bagQty(label)}.` : '';
+    }
     if (/BALL$/.test(label)) return inBattle ? (ctx.gs.inBattle === 1 ? 'Throws a ball at the wild Pokémon to catch it.' : "Can't be used: trainers' Pokémon can't be caught.") : 'UNUSABLE HERE: balls only work in a wild Pokémon battle. Choosing it does nothing.';
     if (/^(HM|TM)\d\d$/.test(label)) return inBattle ? 'Unusable in battle.' : 'Teaches a move to a Pokémon.';
     return '';
@@ -173,7 +183,7 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   const prevExplore = ctx.jev.explore;
   if (repeats >= 3) ctx.jev.explore = true; // same menu keeps coming back → sample instead of repeating
   const focus = ctx.mem.intent?.value;
-  const choice = await ctx.jev.choose(purpose, { ...situation(ctx), currentFocus: focus, screen: screenText }, `A menu is open on screen.${focus ? ` The player's current focus is: ${focus}.` : ''} Which option best serves that focus and the objective? Item rule: only use an item where it actually works (Poké Balls only in wild battles, healing items only on hurt Pokémon, TMs/HMs to teach moves outside battle); if nothing here is useful, pick CANCEL/EXIT. Rule: if this same menu keeps coming back after your answer, your last answer isn't working — choose a different option.${repeats >= 2 ? ` This exact menu has appeared ${repeats} times.` : ''}`, criteria);
+  const choice = await ctx.jev.choose(purpose, { ...situation(ctx), currentFocus: focus, screen: screenText }, `A menu is open on screen.${focus ? ` The player's current focus is: ${focus}.` : ''} Which option best serves that focus and the objective?${/BUY|MONEY/.test(screenText) ? ` Money: ¥${ctx.gs.money}.` : ' Item rule: only use an item where it actually works (Poké Balls only in wild battles, healing items only on hurt Pokémon, TMs/HMs to teach moves outside battle).'} Rule: if this same menu keeps coming back after your answer, your last answer isn't working — choose a different option.${repeats >= 2 ? ` This exact menu has appeared ${repeats} times.` : ''}`, criteria);
   ctx.jev.explore = prevExplore;
   remember(ctx.mem.actions, `menu[${opts.map((o) => o.text).join('|')}] -> ${choice}`, 12);
   ctx.log('decision', `menu → ${choice}`, { options: opts.map((o) => o.text) });
