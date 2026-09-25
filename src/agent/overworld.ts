@@ -525,7 +525,27 @@ let pendingTarget: { map: number; key: string; resumes: number } | null = null;
 let resumingCount = 0;
 const recentHops: number[] = [];
 
+/**
+ * True when the game is back in its overworld loop, taking input. A script can keep running with no
+ * text box on screen (e.g. sound/animation delays after a text); input is ignored until it returns.
+ * Checked from the CPU: waiting in DelayFrame, called from the overworld loop code.
+ */
+function overworldReady(ctx: Ctx): boolean {
+  const core = ctx.emu.core, lo = sym('EnterMap'), hi = sym('JoypadOverworld'), df = sym('DelayFrame');
+  for (let i = 0; i < 4; i++) {
+    const pc = core.programCounter, sp = core.stackPointer;
+    const ret = core.memoryRead(sp) | (core.memoryRead(sp + 1) << 8);
+    if (pc >= df && pc < df + 12 && ret >= lo && ret < hi) return true;
+    ctx.emu.frame();
+  }
+  return false;
+}
+let busyWaited = 0;
+
 export async function overworldStep(ctx: Ctx, agent: Agent) {
+  // a script is still running without a text box: wait for it (capped, so this can never hang)
+  if (busyWaited < 1800 && !overworldReady(ctx)) { ctx.emu.wait(20); busyWaited += 24; return; }
+  busyWaited = 0;
   if (ctx.gs.mapId !== lastDecisionMap) {
     lastMapWasMart = /MART/.test(mapName(lastDecisionMap));
     settleAfterMapChange(ctx);
