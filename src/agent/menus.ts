@@ -336,7 +336,14 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   menuCloses.set(closeKey, closes);
   if (menuCloses.size > 300) menuCloses.clear();
   if (closes >= 3 && asked.probabilities) { // (before the 5-repeats back-out can end the menu)
-    const alts = Object.entries(asked.probabilities).filter(([k]) => k !== CLOSE && criteria[k] && !/RELEASE|TOSS|SELL|DEPOSIT/i.test(`${k} ${criteria[k]}`)); // never force a hard-to-undo action (incl. picking a team member in a deposit list)
+    // never force a hard-to-undo action; in a deposit list only a team member that isn't the strongest, the lead,
+    // or the only one knowing a field move (it can be withdrawn again later)
+    const top = Math.max(...party.map((p) => p.level));
+    const depositOk = (k: string) => {
+      const p = party.find((pp) => pp.nickname === k);
+      return !!p && p.slot !== 0 && p.level < top && p.hp > 0 && !/no other team member knows it/.test(criteria[k]);
+    };
+    const alts = Object.entries(asked.probabilities).filter(([k]) => k !== CLOSE && criteria[k] && (/Picking it DEPOSITS it/.test(criteria[k]) ? depositOk(k) : !/RELEASE|TOSS|SELL|DEPOSIT/i.test(`${k} ${criteria[k]}`)));
     const total = alts.reduce((a, [, p]) => a + p + 0.05, 0);
     let r = Math.random() * total;
     for (const [k, p] of alts) { r -= p + 0.05; if (r <= 0) { choice = k; break; } }

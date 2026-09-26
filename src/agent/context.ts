@@ -39,6 +39,8 @@ export interface Memory {
   blockSig?: string;
   /** a field move no party Pokémon knows that the way to the objective needs (set by the overworld) */
   fieldMoveNeeded?: 'CUT' | 'SURF';
+  /** a first step the objective needs before its own location can be reached (set by the overworld) */
+  subObjective?: string;
   /** whole-team losses by map: how many, and the team (species + levels) at the last one */
   losses?: Record<string, { count: number; team: string; moves?: string }>;
   /** last BILL's PC mode chosen (WITHDRAW/DEPOSIT/RELEASE), for list facts */
@@ -100,7 +102,7 @@ export function situation(ctx: Ctx) {
   const hp = party.reduce((a, p) => a + p.hp, 0), maxHp = party.reduce((a, p) => a + p.maxHp, 0);
   return {
     fieldMoveNeeded: ctx.mem.fieldMoveNeeded ? fieldMoveFact(ctx, ctx.mem.fieldMoveNeeded) : undefined,
-    objective: m ? { goal: m.goal, where: missingNeed(m, gs) ? `${missingNeed(m, gs)!.maps.join(' / ')} first (you don't have ${missingNeed(m, gs)!.what} yet), then ${m.maps.join(' / ')}` : m.maps.join(' / '), typicalOpponentLevel: m.level } : 'Game complete',
+    objective: m ? { goal: m.goal, where: ctx.mem.subObjective ? `First: ${ctx.mem.subObjective}; then ${m.maps.join(' / ')}` : missingNeed(m, gs) ? `${missingNeed(m, gs)!.maps.join(' / ')} first (you don't have ${missingNeed(m, gs)!.what} yet), then ${m.maps.join(' / ')}` : m.maps.join(' / '), typicalOpponentLevel: m.level } : 'Game complete',
     partyHealth: maxHp ? `${Math.round((100 * hp) / maxHp)}% total HP, ${party.filter((p) => p.hp === 0).length} fainted` : 'no Pokémon',
     strongestLevel: Math.max(0, ...party.map((p) => p.level)),
     teamSize: `${party.length}/6`,

@@ -120,16 +120,17 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   // the objective's area: a specific spot when the milestone gives one (a map can have unconnected parts)
   const at = need ? need.at : m?.at ?? gymLeaderSpot(rom, m?.maps ?? []);
   const atMap = at ? objMaps.find((id) => mapName(id) === at.map) : undefined;
-  const atRegion = atMap !== undefined && at ? rg.regionAt(atMap, at.x, at.y) : null;
-  const objRegions = atRegion ? [atRegion] : objMaps.flatMap((id) => rg.regionsOf(id));
-  const inObjective = (map: number, regions: (string | null)[]) => (atRegion ? regions.includes(atRegion) : objMaps.includes(map));
-  const dist = rg.distancesTo(objRegions, skip);
-  lastObjectiveDist = { dist, rg, objMaps, atRegion };
+  let atRegion = atMap !== undefined && at ? rg.regionAt(atMap, at.x, at.y) : null;
+  let objRegions = atRegion ? [atRegion] : objMaps.flatMap((id) => rg.regionsOf(id));
+  let objMapsNow = objMaps;
+  const inObjective = (map: number, regions: (string | null)[]) => (atRegion ? regions.includes(atRegion) : objMapsNow.includes(map));
+  let dist = rg.distancesTo(objRegions, skip);
   destRegionsByKey.clear();
   const hereRegion = rg.regionAt(gs.mapId, px, py);
-  const hereHops = inObjective(gs.mapId, [hereRegion]) ? 0 : (hereRegion ? dist.get(hereRegion) : undefined) ?? Infinity;
+  let hereHops = inObjective(gs.mapId, [hereRegion]) ? 0 : (hereRegion ? dist.get(hereRegion) : undefined) ?? Infinity;
   // unreachable as things are: would a field move nobody knows yet (CUT / SURF) open the way? (a fact for Jev)
   mem.fieldMoveNeeded = undefined;
+  mem.subObjective = undefined;
   if (!isFinite(hereHops) && objMaps.length) {
     const caps = capabilities(ctx);
     for (const mv of ['CUT', 'SURF'] as const) {
@@ -143,7 +144,23 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       const hr = alt.regionAt(gs.mapId, px, py);
       if (hr && d.has(hr)) { mem.fieldMoveNeeded = mv; break; }
     }
+    // Like an item prerequisite ("get X first, found at Y"): when the PC box holds a Pokémon that can learn the
+    // missing field move (now, or after evolving with an item already in the bag), the objective's first step is a
+    // team member that knows it, and where that happens is a Pokémon Center (its PC). How is up to Jev.
+    if (mem.fieldMoveNeeded) {
+      const l = fieldMoveLearners(ctx, mem.fieldMoveNeeded);
+      const inBox = l.box.length > 0 || l.afterEvolving.some((t) => t.startsWith('in the PC box') && /one is in the bag/.test(t));
+      if (!l.party.length && inBox) {
+        mem.subObjective = `a team Pokémon that knows ${mem.fieldMoveNeeded} (the PC box at any Pokémon Center holds Pokémon that can learn it)`;
+        objMapsNow = [...rom.maps.values()].filter((mm) => /POKECENTER/.test(mm.name)).map((mm) => mm.id);
+        atRegion = null;
+        objRegions = objMapsNow.flatMap((id) => rg.regionsOf(id));
+        dist = rg.distancesTo(objRegions, skip);
+        hereHops = inObjective(gs.mapId, [hereRegion]) ? 0 : (hereRegion ? dist.get(hereRegion) : undefined) ?? Infinity;
+      }
+    }
   }
+  lastObjectiveDist = { dist, rg, objMaps: objMapsNow, atRegion };
   // Getting closer to the objective counts as progress (mazes need back-and-forth without new maps)
   const mi = currentMilestone(gs).index;
   if (isFinite(hereHops) && hereHops < (mem.bestHops[mi] ?? Infinity)) mem.bestHops[mi] = hereHops;
@@ -329,7 +346,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const label = HIDDEN_LABEL.find(([re]) => re.test(h.fn))?.[1] ?? `Examine ${h.fn.replace(/^(Print|Display)/, '').replace(/Text$/, '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()}`;
     const k = `${gs.mapName}:hidden${h.x},${h.y}`;
     const said = mem.npcText[k];
-    add(`${label} at (${h.x},${h.y})`, said ? `Examined before: "${clip(said)}".` : 'Not examined yet.', { kind: 'hidden', x: h.x, y: h.y, face }, path);
+    const pcObj = mem.subObjective && label === 'Use the PC' ? ' Mentioned in the current objective (the PC box).' : '';
+    add(`${label} at (${h.x},${h.y})`, (said ? `Examined before: "${clip(said)}".` : 'Not examined yet.') + pcObj, { kind: 'hidden', x: h.x, y: h.y, face }, path);
   }
 
   // Silph Co. card-key doors: facing the door tile and pressing A opens it if the CARD KEY is in the bag
