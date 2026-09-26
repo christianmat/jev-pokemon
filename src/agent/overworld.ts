@@ -678,11 +678,12 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       const facts = [
         `Moves the boulder one square ${d} to (${tx},${ty}).`,
         feature ? `That square is a ${feature.kind === 'switch' ? 'floor switch' : 'hole in the floor'}.` : '',
+        // dead ends first, so they aren't buried after the distances
+        !feature && pushable.length === 0 ? 'After this push the boulder cannot be pushed from any side.' : '',
+        !feature && pushable.length > 0 && lost ? 'After this push no sequence of pushes can bring this boulder onto a floor switch anymore.' : '',
         sw,
         // like the building switches: the closed way and what opens it (a visible floor switch)
         mem.gatedRoute && freeSw.length ? 'The way to the objective is closed by a gate right now; a boulder resting on a floor switch opens it.' : '',
-        !feature && pushable.length === 0 ? 'After this push the boulder cannot be pushed from any side.' : '',
-        !feature && pushable.length > 0 && lost ? 'After this push no sequence of pushes can bring this boulder onto a floor switch anymore.' : '',
         'Boulders go back to their starting spots when you leave this area.',
       ].filter(Boolean).join(' ');
       add(`Push boulder at (${b.x},${b.y}) ${d}`, facts, { kind: 'push', x: b.x, y: b.y, dir: d }, path);
