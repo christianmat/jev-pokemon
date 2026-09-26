@@ -619,7 +619,9 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       }
       return visited.size >= 4000; // search too big: don't claim it's lost
     };
-    if (!(gs.u8('wStatusFlags1') & 1)) add('Activate STRENGTH', 'Lets the player push boulders on this map.', { kind: 'strength' }, []);
+    const swFree = (FLOOR_FEATURES[gs.mapName] ?? []).some((f) => f.kind === 'switch' && !boulders.some((o) => o.x === f.x && o.y === f.y));
+    const gateNote = mem.gatedRoute && swFree ? ' The way to the objective is closed by a gate right now; a boulder resting on a floor switch opens it.' : '';
+    if (!(gs.u8('wStatusFlags1') & 1)) add('Activate STRENGTH', `Lets the player push boulders on this map.${gateNote}`, { kind: 'strength' }, []);
     else for (const b of boulders) for (const d of Object.keys(DIRS) as Dir[]) {
       const [dx, dy] = DIRS[d];
       const sx = b.x - dx, sy = b.y - dy, tx = b.x + dx, ty = b.y + dy;
@@ -670,6 +672,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
         `Moves the boulder one square ${d} to (${tx},${ty}).`,
         feature ? `That square is a ${feature.kind === 'switch' ? 'floor switch' : 'hole in the floor'}.` : '',
         sw,
+        // like the building switches: the closed way and what opens it (a visible floor switch)
+        mem.gatedRoute && freeSw.length ? 'The way to the objective is closed by a gate right now; a boulder resting on a floor switch opens it.' : '',
         !feature && pushable.length === 0 ? 'After this push the boulder cannot be pushed from any side.' : '',
         !feature && pushable.length > 0 && lost ? 'After this push no sequence of pushes can bring this boulder onto a floor switch anymore.' : '',
         'Boulders go back to their starting spots when you leave this area.',
@@ -1154,7 +1158,7 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
     team: /Use the PC|Pokémon Center/,
     train: /tall grass/,
     catch: /tall grass/,
-    progress: /Leads toward the objective|objective is in this place|objective takes place|Mentioned in the current objective|changes which gates are closed/,
+    progress: /Leads toward the objective|objective is in this place|objective takes place|Mentioned in the current objective|changes which gates are closed|floor switch opens it/,
   };
   for (const c of pool) {
     const n = exempt(c) ? 0 : tried[tk(c)] ?? 0;
