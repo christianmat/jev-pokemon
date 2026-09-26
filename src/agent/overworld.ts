@@ -827,6 +827,14 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const t = c.target as { x?: number; y?: number };
     if (t.x !== undefined) c.key = c.key.replace(/^Enter /, `Take the exit at (${t.x},${t.y}) to `);
   }
+  // mid-puzzle: while a push toward a switch is on offer, wandering off (explore / exits that lead away, which also
+  // reset the boulders) isn't offered
+  if (out.some((c) => c.target.kind === 'push' && /Leads toward the objective/.test(c.desc))) {
+    for (const c of [...out]) {
+      const away = (c.target.kind === 'warp' || c.target.kind === 'exit') && /Leads away from the objective/.test(c.desc);
+      if (c.target.kind === 'explore' || away) out.splice(out.indexOf(c), 1);
+    }
+  }
   // can a Pokémon Center be reached from here at all? (a heal focus with no way to one isn't offered)
   healReachable = { map: gs.mapId, ok: /POKECENTER/.test(gs.mapName) || out.some((c) => /Pokémon Center/.test(c.desc) || c.key.includes('NURSE')),
     mart: /MART/.test(gs.mapName) || out.some((c) => /Poké Mart/.test(c.desc) || c.key.includes('CLERK')) };
