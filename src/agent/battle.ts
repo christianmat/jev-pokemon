@@ -183,7 +183,15 @@ async function decideBattle(ctx: Ctx) {
   const goal = b.kind === 'wild' && catching
     ? "The player's current focus is catching new Pokémon."
     : `Choose the best action for this battle.${b.kind === 'wild' && ballsLeft === 0 ? " You have no Poké Balls, so this Pokémon can't be caught." : ''}`;
+  // loop guard: switched twice in a row (each switch uses a turn and changes nothing): no switching this turn
+  const battleId = `${b.kind}:${b.enemy.species}:${b.enemy.level}`;
+  if (switchStreak.id !== battleId) switchStreak = { id: battleId, n: 0 };
+  if (switchStreak.n >= 2) {
+    const rest = Object.keys(opts).filter((k) => !k.startsWith('Switch to ') && !/0 PP left, unusable/.test(opts[k]));
+    if (rest.length) for (const k of Object.keys(opts)) if (k.startsWith('Switch to ')) delete opts[k];
+  }
   const key = await ctx.jev.choose('battle', { ...state, currentFocus: focus }, `You are in a Pokémon battle. ${goal}`, opts);
+  switchStreak.n = key.startsWith('Switch to ') ? switchStreak.n + 1 : 0;
   const shownName = ghost ? 'GHOST' : b.enemy.species;
   remember(ctx.mem.actions, `battle vs ${shownName}: ${key}`, 12);
   ctx.log('decision', `battle vs ${shownName} Lv${b.enemy.level}: ${key}`);
@@ -225,6 +233,8 @@ async function decideSafari(ctx: Ctx) {
   ctx.log('decision', `safari vs ${b.enemy.species}: ${key}`);
   select(ctx, labels[key]);
 }
+
+let switchStreak = { id: '', n: 0 };
 
 export async function battleStep(ctx: Ctx) {
   const s = ctx.gs.screen();
