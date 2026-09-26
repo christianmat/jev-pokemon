@@ -79,6 +79,14 @@ export class Rom {
     return idx >= 0 ? this.moves.get(this.tmMoves[idx]) ?? null : null;
   }
 
+  /** Shop price of an item (ItemPrices, 3-byte BCD; TMs from TechnicalMachinePrices, nybble x ¥1000; HMs 0). 0 = can't be sold. */
+  itemPrice(id: number): number {
+    if (id >= 0xc4 && id < 0xc9) return 0;
+    if (id >= 0xc9) { const n = id - 0xc9; const x = this.b[sym('TechnicalMachinePrices') + (n >> 1)]; return ((n & 1) ? x & 15 : x >> 4) * 1000; }
+    const o = sym('ItemPrices') + (id - 1) * 3, h = (x: number) => (x >> 4) * 10 + (x & 15);
+    return h(this.b[o]) * 10000 + h(this.b[o + 1]) * 100 + h(this.b[o + 2]);
+  }
+
   /** Levels of the wild Pokémon met on land in this map (WildDataPointers: grass rate, then 10 level/species pairs), or null if none. */
   wildLevels(mapId: number): { min: number; max: number } | null {
     const a = sym('WildDataPointers') + mapId * 2;

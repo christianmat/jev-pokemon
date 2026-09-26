@@ -312,11 +312,21 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   // the bag's "Is it OK to toss X?" confirmation
   const tossPrompt = /OK to toss/i.test(screenText);
   // the bag's item list: which items can be thrown away (key items can't)
-  const bagItem = (label: string) => { const it = ctx.gs.bag().find((i) => i.name === label); return it ? (ctx.rom.isKeyItem(it.id) ? 'Key item: can\'t be tossed.' : `${it.qty} in the bag; can be used or tossed.`) : ''; };
+  const selling = /like to sell\?/.test(screenText);
+  const bagItem = (label: string) => {
+    const it = ctx.gs.bag().find((i) => i.name === label);
+    if (!it) return '';
+    // the shop's SELL list: what each item fetches (half its shop price); key items / price-0 items can't be sold
+    if (selling) {
+      const pr = ctx.rom.isKeyItem(it.id) ? 0 : ctx.rom.itemPrice(it.id);
+      return pr ? `Sells for ¥${Math.floor(pr / 2)} each; ${it.qty} in the bag.${ctx.gs.bag().length >= 20 ? ' Selling all of them frees a bag slot.' : ''}` : "Can't be sold (the shop won't buy it).";
+    }
+    return ctx.rom.isKeyItem(it.id) ? 'Key item: can\'t be tossed.' : `${it.qty} in the bag; can be used or tossed.`;
+  };
   const bagSlots = ctx.gs.bag().length;
   const tossFacts = (label: string) => !tossPrompt ? '' : label === 'YES' ? `Throws the item away for good and frees a bag slot (the bag holds ${bagSlots} of 20 item slots${bagSlots >= 20 ? '; while it is full, items on the ground can\'t be picked up' : ''}).` : label === 'NO' ? `Keeps the item; the bag stays at ${bagSlots} of 20 slots.` : '';
   const switchFacts = (label: string) => !switchPrompt ? '' : label === 'YES' ? `Presses the switch: all gates in this building flip. ${ctx.mem.switchFact ?? ''}` : label === 'NO' ? 'Leaves the switch and the gates as they are.' : '';
-  for (const o of opts) criteria[o.text] = `Menu option "${o.text}". ${pcListNote(o.text)} ${MENU_FACTS[o.text] ?? ''} ${floorFact(o.text)} ${pcFact(o.text)} ${itemRule(o.text)} ${extraFacts(o.text) || boxFacts(o.text) || partyFacts(o.text)} ${price(o.text)} ${switchFacts(o.text)} ${tossFacts(o.text)} ${/ITEM/.test(screenText) || ctx.gs.bag().length >= 20 ? bagItem(o.text) : ''}`.replace(/\s+/g, ' ').trim();
+  for (const o of opts) criteria[o.text] = `Menu option "${o.text}". ${pcListNote(o.text)} ${MENU_FACTS[o.text] ?? ''} ${floorFact(o.text)} ${pcFact(o.text)} ${itemRule(o.text)} ${extraFacts(o.text) || boxFacts(o.text) || partyFacts(o.text)} ${price(o.text)} ${switchFacts(o.text)} ${tossFacts(o.text)} ${/ITEM/.test(screenText) || selling || ctx.gs.bag().length >= 20 ? bagItem(o.text) : ''}`.replace(/\s+/g, ' ').trim();
   // Mechanics Jev can always use: scroll a list that has more entries, and back out of any menu.
   const MORE = 'See more items (scroll down)', CLOSE = 'Close this menu';
   // elevator: where the doors lead right now (the game's live warp table)
