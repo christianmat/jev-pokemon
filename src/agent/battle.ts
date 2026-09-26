@@ -215,7 +215,7 @@ async function decideSafari(ctx: Ctx) {
     'Throw ROCK': 'Doubles the catch rate, and makes the Pokémon more likely to run away for 1-5 turns.',
     'Run away': 'Leave this encounter.',
   };
-  const labels: Record<string, string> = { 'Throw SAFARI BALL': 'BALL', 'Throw BAIT': 'BAIT', 'Throw ROCK': 'ROCK', 'Run away': 'RUN' };
+  const labels: Record<string, string> = { 'Throw SAFARI BALL': 'BALL', 'Throw BAIT': 'BAIT', 'Throw ROCK': 'THROW ROCK', 'Run away': 'RUN' };
   const state = { ...situation(ctx), safari: { wild: `${b.enemy.species} Lv${b.enemy.level} (${b.enemy.types.join('/')})`, safariBalls: balls, catchRate: rate, stepsLeft: (gs.u8('wSafariSteps') << 8) | gs.u8('wSafariSteps', 1) } };
   const key = await ctx.jev.choose('battle', state, 'You are in a Safari Zone encounter: you cannot fight, only throw Safari Balls, bait or rocks, or run.', opts);
   remember(ctx.mem.actions, `safari vs ${b.enemy.species}: ${key}`, 12);
