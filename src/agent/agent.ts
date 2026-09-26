@@ -87,7 +87,7 @@ export class Agent {
     }
     // ...but only while the focus is training/catching: wild fights on the way (caves) aren't progress toward the objective
     const training = /^(train|catch)$/.test(mem.intent?.value ?? '');
-    const key = `${index}|${Object.keys(mem.visitedMaps).length}|${gs.badges}|${gs.party().length}|${mem.bestHops?.[index] ?? ''}|${events}|${training ? Math.floor(exp / 200) : ''}`;
+    const key = `${index}|${Object.keys(mem.visitedMaps).length}|${gs.badges}|${gs.party().length}|${mem.bestHops?.[index] ?? ''}|${events}|${training ? Math.floor(exp / 200) : ''}|${mem.boulderGains ?? 0}`;
     if (key !== this.lastProgressKey) { this.lastProgressKey = key; this.decisionsSinceProgress = 0; mem.triedNoProgress = {}; }
   }
 

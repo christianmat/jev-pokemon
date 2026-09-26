@@ -654,6 +654,13 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
         return Infinity;
       };
       const dTxt = (v: number) => (isFinite(v) ? `${v} squares` : 'no open floor path');
+      // a boulder closer to a switch than ever on this visit is puzzle progress (the loop guard reads it)
+      const nowD = near(b.x, b.y), vk = `${gs.mapName}#${mem.visitedMaps[gs.mapName] ?? 0}:${b.index}`; // per boulder, per visit
+      const prevD = mem.boulderBest?.[vk];
+      if (isFinite(nowD) && nowD < (prevD ?? Infinity)) {
+        (mem.boulderBest ??= {})[vk] = nowD;
+        if (prevD !== undefined) mem.boulderGains = (mem.boulderGains ?? 0) + 1; // the first reading on a visit isn't progress
+      }
       // can any sequence of pushes still bring this boulder onto a free floor switch after this push?
       const lost = freeSw.length > 0 && feature?.kind !== 'switch' && !switchReachable(b, tx, ty, b.x, b.y, freeSw);
       const sw = freeSw.length && feature?.kind !== 'switch'
