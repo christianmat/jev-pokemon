@@ -755,7 +755,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     // where the walk ends: same route facts as any other destination on this map
     const end = ep[ep.length - 1];
     const er = end ? rg.regionAt(gs.mapId, end.x, end.y) : null;
-    const eFact = er && er !== hereRegion ? ` ${routeFacts(gs.mapId, [er])}` : isFinite(hereHops) && hereHops > 0 ? ' Stays in the current area (does not bring the objective closer).' : '';
+    // with a gate closed, layout distances say nothing about where exploring gets you: no claim either way
+    const eFact = mem.gatedRoute ? '' : er && er !== hereRegion ? ` ${routeFacts(gs.mapId, [er])}` : isFinite(hereHops) && hereHops > 0 ? ' Stays in the current area (does not bring the objective closer).' : '';
     add('Explore this area', `Walk to a part of ${gs.mapName} not yet explored.${eFact}`, { kind: 'explore' }, ep);
   }
 
