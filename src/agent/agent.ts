@@ -85,7 +85,9 @@ export class Agent {
       const a = sym('wPartyMons') + i * 44 + 14;
       exp += (this.ctx.emu.mem[a] << 16) | (this.ctx.emu.mem[a + 1] << 8) | this.ctx.emu.mem[a + 2];
     }
-    const key = `${index}|${Object.keys(mem.visitedMaps).length}|${gs.badges}|${gs.party().length}|${mem.bestHops?.[index] ?? ''}|${events}|${Math.floor(exp / 200)}`;
+    // ...but only while the focus is training/catching: wild fights on the way (caves) aren't progress toward the objective
+    const training = /^(train|catch)$/.test(mem.intent?.value ?? '');
+    const key = `${index}|${Object.keys(mem.visitedMaps).length}|${gs.badges}|${gs.party().length}|${mem.bestHops?.[index] ?? ''}|${events}|${training ? Math.floor(exp / 200) : ''}`;
     if (key !== this.lastProgressKey) { this.lastProgressKey = key; this.decisionsSinceProgress = 0; mem.triedNoProgress = {}; }
   }
 
