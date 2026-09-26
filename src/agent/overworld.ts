@@ -56,6 +56,8 @@ const hasCardKey = (gs: Ctx['gs']) => gs.bag().some((i) => i.name === 'CARD KEY'
 function blockedSquares(ctx: Ctx, exceptIndex = -1): Set<string> {
   const s = new Set<string>();
   for (const sp of ctx.gs.sprites()) if (!sp.hidden && sp.index !== exceptIndex) s.add(`${sp.x},${sp.y}`);
+  // squares where stepping on triggered a speech that sent us back (e.g. a locked door's script): walk around them
+  for (const k of ctx.mem.trapSquares?.[ctx.gs.mapName] ?? []) s.add(k);
   return s;
 }
 
@@ -111,7 +113,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   mem.needsMissing = need?.what;
   // a new badge / objective / item can open what stopped us before: forget the "did not get through" counts then
   const blockSig = `${gs.badges}|${currentMilestone(gs).index}|${gs.bag().map((i) => i.name).sort().join(',')}`;
-  if (mem.blockSig !== undefined && mem.blockSig !== blockSig) mem.blockedExits = {};
+  if (mem.blockSig !== undefined && mem.blockSig !== blockSig) { mem.blockedExits = {}; mem.trapSquares = {}; }
   mem.blockSig = blockSig;
   const needsItem = !!need;
   const objMaps = (need ? need.maps : m?.maps ?? []).map((n) => Object.entries((gen as any).maps).find(([, v]: any) => v.name === n)?.[0]).filter(Boolean).map(Number);
@@ -991,6 +993,15 @@ async function runChosen(ctx: Ctx, c: Candidate, agent: Agent, battleInterrupt: 
       const k = `${mapNameBefore}:${c.key}`;
       ctx.mem.blockedExits[k] = (ctx.mem.blockedExits[k] ?? 0) + 1;
       if (said.length) ctx.mem.npcText[`${k}:blocked`] = said.join(' ').slice(-1500);
+      // sent back by a speech: the square we were about to step onto triggered it; walk around it from now on
+      if (said.length && !advanced && c.path.length) {
+        const i = c.path.findIndex((st) => st.x === ctx.gs.x && st.y === ctx.gs.y);
+        const next = i >= 0 ? c.path[i + 1] : c.path.reduce((a, st) => Math.abs(st.x - ctx.gs.x) + Math.abs(st.y - ctx.gs.y) === 1 && (!a || c.path.indexOf(st) > c.path.indexOf(a)) ? st : a, undefined as Step | undefined);
+        if (next && !(next.x === tg.x && next.y === tg.y)) {
+          const t = ((ctx.mem.trapSquares ??= {})[mapNameBefore] ??= []);
+          if (!t.includes(`${next.x},${next.y}`)) { t.push(`${next.x},${next.y}`); ctx.log('info', `(${next.x},${next.y}) on ${mapNameBefore} sent us back: walking around it from now on`); }
+        }
+      }
       if (isExit && fromRegion) for (const e of edges) bE[e] = (bE[e] ?? 0) + 1;
       pendingTarget = null; // stopped, not merely interrupted: let Jev decide again
       ctx.log('info', `${c.key}: did not get through (${ctx.mem.blockedExits[k]}x, walk ${res}, at ${ctx.gs.x},${ctx.gs.y})${said.length ? ` — "${said.join(' ').slice(0, 80)}"` : ''}`);
