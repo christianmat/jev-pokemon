@@ -88,11 +88,20 @@ async function decideBattle(ctx: Ctx) {
       actions[key] = () => { if (!select(ctx, 'FIGHT')) return; if (cursorTo(ctx, mv.name)) confirmA(ctx); else tap(ctx, 'B', 20); };
       continue;
     }
+    // side effects on the user (Gen 1 rules)
+    const SIDE: Record<string, string> = {
+      SELFDESTRUCT: ' The user faints after using it (even if it misses).',
+      EXPLOSION: ' The user faints after using it (even if it misses).',
+      'TAKE DOWN': ' The user takes 1/4 of the damage dealt as recoil.',
+      'DOUBLE-EDGE': ' The user takes 1/4 of the damage dealt as recoil.',
+      SUBMISSION: ' The user takes 1/4 of the damage dealt as recoil.',
+      'HYPER BEAM': ' The user must recharge next turn unless it knocks the enemy out.',
+    };
     const effNote = mv.power ? `${effWord(eff)} against ${b.enemy.types.join('/')}. ${stab ? 'Same-type bonus. ' : ''}` : ''; // type matchups only matter for damaging moves
     // stat stages in play (e.g. the enemy used MINIMIZE / DOUBLE TEAM, or SAND-ATTACK lowered our accuracy)
     const hit = hitChance(ctx, mv.accuracy);
     const hitNote = hit !== undefined && hit !== mv.accuracy ? ` Hit chance right now about ${hit}% (${hitWhy(ctx)}).` : '';
-    opts[key] = mv.pp === 0 ? `${mv.name}: 0 PP left, unusable.` : `${mv.name}: ${mv.type} move, power ${mv.power}, accuracy ${mv.accuracy}%, ${mv.pp} PP left.${hitNote} ${effNote}${dmg}`;
+    opts[key] = mv.pp === 0 ? `${mv.name}: 0 PP left, unusable.` : `${mv.name}: ${mv.type} move, power ${mv.power}, accuracy ${mv.accuracy}%, ${mv.pp} PP left.${hitNote} ${effNote}${dmg}${SIDE[mv.name] ?? ''}`;
     actions[key] = () => { if (!select(ctx, 'FIGHT')) return; if (cursorTo(ctx, mv.name)) confirmA(ctx); else tap(ctx, 'B', 20); };
   }
 
