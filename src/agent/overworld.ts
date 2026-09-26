@@ -120,7 +120,9 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const stay = new Set<string>();
     for (const sp of gs.sprites()) {
       const o = md?.objects[sp.index - 1];
-      if (!sp.hidden && o && o.movement === 0xff && o.item == null) stay.add(`${sp.x},${sp.y}`);
+      // boulders aren't walls here: they can be pushed, and other floors are modelled without them too (same rule
+      // everywhere, otherwise two floors can each look like the way out of the other)
+      if (!sp.hidden && o && o.movement === 0xff && o.item == null && SPRITES[sp.picture] !== 'BOULDER') stay.add(`${sp.x},${sp.y}`);
     }
     // live walkability too (doors opened/closed by events differ from the map's static data)
     // a locked Silph Co. door counts as passable for routing once the CARD KEY is in the bag (it opens with A)
