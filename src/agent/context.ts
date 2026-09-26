@@ -3,7 +3,7 @@ import type { Rom } from '../game/rom.js';
 import type { GameState } from '../game/state.js';
 import type { Jev } from '../jev/client.js';
 import { RegionGraph, type Caps } from '../game/regions.js';
-import { currentMilestone } from '../knowledge/milestones.js';
+import { currentMilestone, missingNeed } from '../knowledge/milestones.js';
 import { mapName } from '../game/symbols.js';
 
 export interface Memory {
@@ -91,7 +91,7 @@ export function situation(ctx: Ctx) {
   const party = gs.party();
   const hp = party.reduce((a, p) => a + p.hp, 0), maxHp = party.reduce((a, p) => a + p.maxHp, 0);
   return {
-    objective: m ? { goal: m.goal, where: m.needs && !gs.bag().some((i) => m.needs!.item.test(i.name)) ? `${m.needs.maps.join(' / ')} first (you don't have ${m.needs.what} yet), then ${m.maps.join(' / ')}` : m.maps.join(' / '), typicalOpponentLevel: m.level } : 'Game complete',
+    objective: m ? { goal: m.goal, where: missingNeed(m, gs) ? `${missingNeed(m, gs)!.maps.join(' / ')} first (you don't have ${missingNeed(m, gs)!.what} yet), then ${m.maps.join(' / ')}` : m.maps.join(' / '), typicalOpponentLevel: m.level } : 'Game complete',
     partyHealth: maxHp ? `${Math.round((100 * hp) / maxHp)}% total HP, ${party.filter((p) => p.hp === 0).length} fainted` : 'no Pokémon',
     strongestLevel: Math.max(0, ...party.map((p) => p.level)),
     teamSize: `${party.length}/6`,

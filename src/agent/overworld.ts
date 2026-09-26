@@ -4,7 +4,7 @@ import type { Agent } from './agent.js';
 import { buildGrid, findPath, DIRS, type Dir, type Grid, type Step } from '../game/world.js';
 import { sym, mapName } from '../game/symbols.js';
 import gen from '../data/generated.json' with { type: 'json' };
-import { currentMilestone } from '../knowledge/milestones.js';
+import { currentMilestone, missingNeed } from '../knowledge/milestones.js';
 import { useFieldMove, useItem, slotWithMove, closeMenus } from './field.js';
 import { resetMenuRepeats } from './menus.js';
 import { capabilities } from './context.js';
@@ -64,19 +64,20 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   const surf = gs.walkState === 2;
   const { m } = currentMilestone(gs);
   // a prerequisite item not in the bag yet: head to where it's found first
-  const needsItem = m?.needs && !gs.bag().some((i) => m.needs!.item.test(i.name));
-  // the prerequisite just arrived: what blocked us before (e.g. guards wanting it) may be open now
-  if (m?.needs && !needsItem && mem.needsMissing === m.id) {
+  const need = missingNeed(m, gs);
+  // a prerequisite just arrived: what blocked us before (e.g. guards wanting it) may be open now
+  if (mem.needsMissing && mem.needsMissing !== need?.what) {
     mem.blockedEdges = {}; mem.blockedExits = {};
     for (const k of Object.keys(mem.npcText)) if (k.endsWith(':blocked')) delete mem.npcText[k];
-    ctx.log('info', `got ${m.needs.what}: cleared earlier "did not get through" records`);
+    ctx.log('info', `got ${mem.needsMissing}: cleared earlier "did not get through" records`);
   }
-  mem.needsMissing = needsItem ? m!.id : undefined;
-  const objMaps = (needsItem ? m!.needs!.maps : m?.maps ?? []).map((n) => Object.entries((gen as any).maps).find(([, v]: any) => v.name === n)?.[0]).filter(Boolean).map(Number);
+  mem.needsMissing = need?.what;
+  const needsItem = !!need;
+  const objMaps = (need ? need.maps : m?.maps ?? []).map((n) => Object.entries((gen as any).maps).find(([, v]: any) => v.name === n)?.[0]).filter(Boolean).map(Number);
   // exits that stopped us at least twice are left out of route distances until one works again
   const skip = new Set(Object.entries(mem.blockedEdges ?? {}).filter(([, n]) => n >= 2).map(([e]) => e));
   // the objective's area: a specific spot when the milestone gives one (a map can have unconnected parts)
-  const atMap = m?.at ? objMaps.find((id) => mapName(id) === m.at!.map) : undefined;
+  const atMap = m?.at && !need ? objMaps.find((id) => mapName(id) === m.at!.map) : undefined;
   const atRegion = atMap !== undefined ? rg.regionAt(atMap, m!.at!.x, m!.at!.y) : null;
   const objRegions = atRegion ? [atRegion] : objMaps.flatMap((id) => rg.regionsOf(id));
   const inObjective = (map: number, regions: (string | null)[]) => (atRegion ? regions.includes(atRegion) : objMaps.includes(map));
