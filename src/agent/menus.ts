@@ -189,7 +189,13 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     CANCEL: 'Close this menu without doing anything.',
     HEAL: 'Fully heal the whole party for free.',
   };
-  const price = (label: string) => { const r = screenText.match(new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*/\\s*<ED>(\\d+)')); return r ? `Costs ¥${r[1]}.` : ''; };
+  // the price is the first ¥ amount after the item's name (other text can sit in between, e.g. a half-hidden QUIT)
+  const price = (label: string) => {
+    const i = screenText.indexOf(label);
+    if (i < 0 || !/BUY/.test(screenText) || /^(BUY|SELL|QUIT)$/.test(label)) return '';
+    const r = screenText.slice(i + label.length).match(/^[^<]{0,40}?<ED>(\d+)/);
+    return r ? `Costs ¥${r[1]}.` : '';
+  };
   const inBattle = ctx.gs.inBattle !== 0;
   const shopping = /BUY|MONEY/.test(screenText);
   const SHOP_FACTS: [RegExp, string][] = [
