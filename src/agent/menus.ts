@@ -202,7 +202,10 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     const i = screenText.indexOf(label);
     if (i < 0 || !/BUY/.test(screenText) || /^(BUY|SELL|QUIT)$/.test(label)) return '';
     const r = screenText.slice(i + label.length).match(/^[^<]{0,40}?<ED>(\d+)/);
-    return r ? `Costs ¥${r[1]}.` : '';
+    if (!r) return '';
+    // a full bag can't take a new kind of item (more of one already in the bag still fits)
+    const full = ctx.gs.bag().length >= 20 && !ctx.gs.bag().some((i) => i.name === label);
+    return `Costs ¥${r[1]}.${full ? ' The bag is full (20 of 20 item slots): a new kind of item can\'t be bought until a slot is freed.' : ''}`;
   };
   const inBattle = ctx.gs.inBattle !== 0;
   const shopping = /BUY|MONEY/.test(screenText);
