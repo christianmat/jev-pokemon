@@ -61,6 +61,10 @@ export class RegionGraph {
   }
 
   grid(map: number) { return this.grids.get(map); }
+  /** warp-square region -> the floor areas you can step off into (arriving on a door, you walk into these) */
+  private stepOff = new Map<string, string[]>();
+  /** The area(s) you end up in after arriving on this region: for a warp square, where you step off to. */
+  landing(region: string): string[] { const s = this.stepOff.get(region); return s && s.length ? s : [region]; }
   mapData(map: number) { return this.rom.maps.get(map); }
 
   /** Squares on a map that are occupied right now (people who never move): kept out of that map's regions. */
@@ -75,7 +79,7 @@ export class RegionGraph {
     this.extraBlocked.clear(); this.liveWalk.clear();
     if (blocked.size) this.extraBlocked.set(map, blocked);
     if (walk) this.liveWalk.set(map, walk);
-    this.out.clear();
+    this.out.clear(); this.stepOff.clear();
     for (const md of this.rom.maps.values()) this.label(md);
     for (const md of this.rom.maps.values()) this.link(md);
   }
@@ -129,7 +133,10 @@ export class RegionGraph {
       next++;
     }
     this.comp.set(md.id, { w: g.w, h: g.h, ids });
-    for (const [wid, sides] of warpSides) for (const sd of sides) this.add(`${md.id}:${wid}`, `${md.id}:${sd}`);
+    for (const [wid, sides] of warpSides) {
+      for (const sd of sides) this.add(`${md.id}:${wid}`, `${md.id}:${sd}`);
+      this.stepOff.set(`${md.id}:${wid}`, sides.map((sd) => `${md.id}:${sd}`));
+    }
     // spinners: from any region touching an arrow tile to the region where it lands (following chains)
     for (const [k, land0] of spinners ?? []) {
       const [sx, sy] = k.split(',').map(Number);

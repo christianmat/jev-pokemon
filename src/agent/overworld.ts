@@ -189,7 +189,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   };
 
   // Warps (dedupe adjacent warps with the same destination)
-  const seenWarp = new Map<string, Candidate>();
+  const seenWarp: { dest: number; land: Set<string>; c: Candidate }[] = [];
   const blockers = new Map<number, string>(); // sprite index -> fact
   const lastMap = gs.u8('wLastMap');
   (md?.warps ?? []).forEach((w, wi) => {
@@ -213,7 +213,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       const r = t ? rg.regionAt(liveMap, t.x, t.y) : null;
       if (r) { dest = liveMap; destRegions = [r]; }
     }
-    const k = `${dest}|${destRegions.join(',')}`;
+    // doors side by side (a 2-wide gate) land on different squares but in the same area: same place
+    const land = new Set(destRegions.flatMap((r) => rg.landing(r)));
     const blockedExceptThis = new Set(blocked); blockedExceptThis.delete(`${w.x},${w.y}`);
     const path = px === w.x && py === w.y ? [] : findPath(g, px, py, (x, y) => x === w.x && y === w.y, { blocked: blockedExceptThis, surf });
     // exit only unreachable because a person stands in the way → record that as a plain fact on that person
@@ -237,14 +238,15 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       return;
     }
     // merge doors that lead to the same place — but only reachable ones, keeping the nearest
-    const prev = seenWarp.get(k);
+    const prevE = seenWarp.find((e) => e.dest === dest && (land.size === 0 ? e.land.size === 0 : [...land].some((r) => e.land.has(r))));
+    const prev = prevE?.c;
     if (prev && prev.path.length <= path.length) return;
-    if (prev) out.splice(out.indexOf(prev), 1);
+    if (prevE) { out.splice(out.indexOf(prevE.c), 1); seenWarp.splice(seenWarp.indexOf(prevE), 1); }
     const name = mapName(dest);
     const heal = /POKECENTER/.test(name) ? ' A Pokémon Center: the nurse heals the whole party for free. Healing here also makes it where you return if all your Pokémon faint.' : /MART/.test(name) ? ' A Poké Mart: buy items.' : /GYM/.test(name) ? ' A Pokémon Gym.' : '';
     destRegionsByKey.set(`w:${w.x},${w.y}`, destRegions);
     add(`Enter ${name}`, `Door/stairs/ladder at (${w.x},${w.y}) leading to ${name}.${heal} ${routeFacts(dest, destRegions)}${svc(destRegions)} ${visitFacts(dest)}`, { kind: 'warp', x: w.x, y: w.y, dest }, path);
-    seenWarp.set(k, out[out.length - 1]);
+    seenWarp.push({ dest, land, c: out[out.length - 1] });
   });
 
   // Map-edge connections
