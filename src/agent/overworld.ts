@@ -48,6 +48,19 @@ function gymLeaderSpot(rom: Ctx['rom'], maps: string[]) {
   }
   return undefined;
 }
+/** An objective to find an item: the square of that item's ball on the objective map (the item is named in the goal). */
+function goalItemSpot(rom: Ctx['rom'], maps: string[], goal: string) {
+  const letters = (t: string) => t.toUpperCase().replace(/[^A-Z]/g, '');
+  const g = letters(goal);
+  for (const name of maps) {
+    const md = [...rom.maps.values()].find((mm) => mm.name === name);
+    for (const o of md?.objects ?? []) {
+      const item = o.item != null ? rom.items.get(o.item) : undefined;
+      if (item && letters(item).length >= 5 && g.includes(letters(item))) return { map: name, x: o.x, y: o.y };
+    }
+  }
+  return undefined;
+}
 /** Silph Co. card-key door tile (the game checks the tile in front of the player on these floors). */
 const cardKeyDoor = (gs: { mapName: string }, g: Grid, x: number, y: number) => {
   if (!/^SILPH_CO_([2-9]|1[01])F$/.test(gs.mapName)) return false;
@@ -135,7 +148,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   // exits that stopped us at least twice are left out of route distances until one works again
   const skip = new Set(Object.entries(mem.blockedEdges ?? {}).filter(([, n]) => n >= 2).map(([e]) => e));
   // the objective's area: a specific spot when the milestone gives one (a map can have unconnected parts)
-  const at = need ? need.at : m?.at ?? gymLeaderSpot(rom, m?.maps ?? []);
+  const at = need ? need.at : m?.at ?? gymLeaderSpot(rom, m?.maps ?? []) ?? goalItemSpot(rom, m?.maps ?? [], m?.goal ?? '');
   const atMap = at ? objMaps.find((id) => mapName(id) === at.map) : undefined;
   let atRegion = atMap !== undefined && at ? rg.regionAt(atMap, at.x, at.y) : null;
   let objRegions = atRegion ? [atRegion] : objMaps.flatMap((id) => rg.regionsOf(id));
