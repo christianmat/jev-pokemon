@@ -15,6 +15,7 @@ export interface StaticGrid { w: number; h: number; walk: (x: number, y: number)
 
 export interface Caps { cut: boolean; surf: boolean }
 const WATER_TILESETS = new Set([0, 3, 5, 7, 13, 14, 17, 22, 23]);
+const BOULDER_SPRITE = 63;
 
 export function staticGrid(rom: Rom, md: MapData, caps: Caps = { cut: false, surf: false }, blockOv?: Map<number, number>): StaticGrid {
   const r = rom.b;
@@ -110,6 +111,7 @@ export class RegionGraph {
   private extraBlocked = new Map<number, Set<string>>();
   private liveWalk = new Map<number, (x: number, y: number) => boolean>();
   private extraKey = '';
+  private layoutMode = false;
   /** Re-split one map's regions around occupied squares (only when they changed), then relink everything. */
   refine(map: number, blocked: Set<string>, walk?: (x: number, y: number) => boolean, walkKey = '', others?: Map<number, { walk: (x: number, y: number) => boolean; key: string }>) {
     // `others`: how other maps looked when last seen (gates moved by switches), used instead of their default layout
@@ -119,7 +121,8 @@ export class RegionGraph {
     this.extraKey = key;
     this.extraBlocked.clear(); this.liveWalk.clear();
     for (const [m, o] of others ?? []) if (m !== map) this.liveWalk.set(m, o.walk);
-    if (blocked.size) this.extraBlocked.set(map, blocked);
+    this.extraBlocked.set(map, blocked);
+    this.layoutMode = walkKey === 'layout';
     if (walk) this.liveWalk.set(map, walk);
     this.out.clear(); this.stepOff.clear();
     for (const md of this.rom.maps.values()) this.label(md);
@@ -134,7 +137,9 @@ export class RegionGraph {
     const cached = this.grids.get(md.id);
     if (cached) g = cached;
     else { try { g = staticGrid(this.rom, md, this.caps, this.blockOverrides(md)); } catch { return; } this.grids.set(md.id, g); }
-    const extra = this.extraBlocked.get(md.id);
+    // boulders block like walls: live positions on the current map (passed in); on other maps their starting spots,
+    // where they are whenever you enter. The "by layout" view (gated routes) ignores boulders everywhere.
+    const extra = this.extraBlocked.get(md.id) ?? (this.layoutMode ? undefined : new Set(md.objects.filter((o) => o.sprite === BOULDER_SPRITE).map((o) => `${o.x},${o.y}`)));
     const live = this.liveWalk.get(md.id);
     const walkable = (x: number, y: number) => (live ? live(x, y) : g.walk(x, y));
     const ids = new Int32Array(g.w * g.h).fill(-1);

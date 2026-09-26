@@ -120,9 +120,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const stay = new Set<string>();
     for (const sp of gs.sprites()) {
       const o = md?.objects[sp.index - 1];
-      // boulders aren't walls here: they can be pushed, and other floors are modelled without them too (same rule
-      // everywhere, otherwise two floors can each look like the way out of the other)
-      if (!sp.hidden && o && o.movement === 0xff && o.item == null && SPRITES[sp.picture] !== 'BOULDER') stay.add(`${sp.x},${sp.y}`);
+      if (!sp.hidden && o && o.movement === 0xff && o.item == null) stay.add(`${sp.x},${sp.y}`);
     }
     // live walkability too (doors opened/closed by events differ from the map's static data)
     // a locked Silph Co. door counts as passable for routing once the CARD KEY is in the bag (it opens with A)
@@ -290,7 +288,9 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   const pcDist = serviceDist(/POKECENTER/), martDist = serviceDist(/_MART$/);
   lastServiceDist = { pc: pcDist, mart: martDist };
   const hereReg = hereRegion ? [hereRegion] : [];
+  // the "by layout" view ignores gates and boulders: no Pokémon Center / Mart direction claims from it
   const svc = (regions: string[]) => {
+    if (mem.gatedRoute) return '';
     const f = (d: Map<string, number>, label: string) => {
       const here = Math.min(Infinity, ...hereReg.map((r) => d.get(r) ?? Infinity));
       const there = Math.min(Infinity, ...regions.map((r) => d.get(r) ?? Infinity));
