@@ -596,10 +596,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   }
   // a full bag: items on the ground can't be picked up; any non-key item can be thrown away to free a slot
   if (gs.bag().length >= 20) {
-    for (const it of gs.bag()) {
-      if (rom.isKeyItem(it.id)) continue;
-      add(`Toss ${it.name} from the bag`, `Throws it away for good (${it.qty} in the bag) to free a bag slot. The bag is full (20 of 20 item slots), so items on the ground can't be picked up.`, { kind: 'toss', name: it.name }, []);
-    }
+    const tossable = gs.bag().filter((it) => !rom.isKeyItem(it.id)).map((it) => it.name);
+    if (tossable.length) add('Open the bag to toss an item', `The bag is full (20 of 20 item slots), so items on the ground can't be picked up. In the bag, an item's menu offers TOSS (throws it away for good and frees a slot). Items that can be tossed: ${tossable.join(', ')}.`, { kind: 'toss', name: '' }, []);
   }
 
   // Tall grass (wild encounters: train / catch)

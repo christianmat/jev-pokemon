@@ -59,6 +59,7 @@ function openItemBox(ctx: Ctx, box: () => boolean) {
 /** Open the bag on an item and choose TOSS with quantity 1; the game's "Is it OK to toss" YES/NO is left for Jev. */
 export function tossItem(ctx: Ctx, item: string): boolean {
   if (!openStart(ctx) || !select(ctx, 'ITEM')) { closeMenus(ctx); return false; }
+  if (!item) return true; // just the bag list: which item, and USE / TOSS, are Jev's menu choices
   ctx.emu.wait(20);
   if (!cursorTo(ctx, item)) { closeMenus(ctx); return false; }
   const box = () => ctx.gs.screen().rows.some((r) => r.includes('TOSS'));
