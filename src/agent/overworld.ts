@@ -63,7 +63,9 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   const blocked = new Set([...blockedSquares(ctx), ...warpSquares]);
   const surf = gs.walkState === 2;
   const { m } = currentMilestone(gs);
-  const objMaps = (m?.maps ?? []).map((n) => Object.entries((gen as any).maps).find(([, v]: any) => v.name === n)?.[0]).filter(Boolean).map(Number);
+  // a prerequisite item not in the bag yet: head to where it's found first
+  const needsItem = m?.needs && !gs.bag().some((i) => m.needs!.item.test(i.name));
+  const objMaps = (needsItem ? m!.needs!.maps : m?.maps ?? []).map((n) => Object.entries((gen as any).maps).find(([, v]: any) => v.name === n)?.[0]).filter(Boolean).map(Number);
   // exits that stopped us at least twice are left out of route distances until one works again
   const skip = new Set(Object.entries(mem.blockedEdges ?? {}).filter(([, n]) => n >= 2).map(([e]) => e));
   // the objective's area: a specific spot when the milestone gives one (a map can have unconnected parts)
@@ -228,7 +230,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const path = sgGoal(px, py) ? [] : findPath(g, px, py, sgGoal, { blocked, maxNodes: 6000 });
     const k = `${gs.mapName}:sign${sg.x},${sg.y}`;
     const said = mem.npcText[k];
-    if (/ELEVATOR/.test(gs.mapName)) add(`Use the elevator panel at (${sg.x},${sg.y})`, `The elevator's floor-select panel.${said ? ` Last time it said: "${clip(said)}".` : ''}`, { kind: 'sign', x: sg.x, y: sg.y }, path);
+    if (gs.mapName === 'CELADON_MART_ROOF' && sg.y <= 2 && sg.x >= 10 && sg.x <= 12) add(`Use the vending machine at (${sg.x},${sg.y})`, `A drink vending machine (FRESH WATER ¥200, SODA POP ¥300, LEMONADE ¥350).${said ? ` Last time: "${clip(said)}".` : ''}`, { kind: 'sign', x: sg.x, y: sg.y }, path);
+    else if (/ELEVATOR/.test(gs.mapName)) add(`Use the elevator panel at (${sg.x},${sg.y})`, `The elevator's floor-select panel.${said ? ` Last time it said: "${clip(said)}".` : ''}`, { kind: 'sign', x: sg.x, y: sg.y }, path);
     else add(`Read sign at (${sg.x},${sg.y})`, said ? `A sign. It says: "${said.slice(0, 300)}".` : 'A sign, not yet read.', { kind: 'sign', x: sg.x, y: sg.y }, path);
   }
 
