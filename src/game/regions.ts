@@ -80,11 +80,14 @@ export class RegionGraph {
   private liveWalk = new Map<number, (x: number, y: number) => boolean>();
   private extraKey = '';
   /** Re-split one map's regions around occupied squares (only when they changed), then relink everything. */
-  refine(map: number, blocked: Set<string>, walk?: (x: number, y: number) => boolean, walkKey = '') {
-    const key = `${map}|${[...blocked].sort().join(';')}|${walkKey}`;
+  refine(map: number, blocked: Set<string>, walk?: (x: number, y: number) => boolean, walkKey = '', others?: Map<number, { walk: (x: number, y: number) => boolean; key: string }>) {
+    // `others`: how other maps looked when last seen (gates moved by switches), used instead of their default layout
+    const othersKey = others ? [...others.entries()].map(([m, o]) => `${m}:${o.key}`).join('/') : '';
+    const key = `${map}|${[...blocked].sort().join(';')}|${walkKey}|${othersKey}`;
     if (key === this.extraKey) return;
     this.extraKey = key;
     this.extraBlocked.clear(); this.liveWalk.clear();
+    for (const [m, o] of others ?? []) if (m !== map) this.liveWalk.set(m, o.walk);
     if (blocked.size) this.extraBlocked.set(map, blocked);
     if (walk) this.liveWalk.set(map, walk);
     this.out.clear(); this.stepOff.clear();

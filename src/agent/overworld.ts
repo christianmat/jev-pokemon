@@ -11,6 +11,9 @@ import { capabilities, fieldMoveLearners } from './context.js';
 import { RegionGraph, HOLES } from '../game/regions.js';
 /** region graphs for capabilities the party doesn't have yet (to tell whether CUT/SURF is what's missing) */
 const hypoGraphs = new Map<string, RegionGraph>();
+/** per map: walkability when last seen (live), used for maps other than the current one */
+const seenWalk = new Map<number, { walk: (x: number, y: number) => boolean; key: string }>();
+const hashStr = (t: string) => { let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return h; };
 
 const SPRITES = (gen as any).sprites as Record<string, string>;
 const loggedUnreachable = new Set<string>();
@@ -101,7 +104,11 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const fm = capabilities(ctx);
     const walk = (x: number, y: number) => g.walkable(x, y) || keyDoor(x, y) || (fm.cut && g.cuttable(x, y)) || (fm.surf && g.water(x, y));
     let wk = ''; for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) wk += walk(x, y) ? '1' : '0';
-    rg.refine(gs.mapId, stay, walk, wk);
+    // remember how this map looks now; other maps use their last-seen look (a switch press can change them: forgotten then)
+    if (mem.switchPressedOn) seenWalk.clear();
+    const bits = wk, w = g.w;
+    seenWalk.set(gs.mapId, { walk: (x: number, y: number) => x >= 0 && y >= 0 && x < w && bits[y * w + x] === '1', key: String(hashStr(wk)) });
+    rg.refine(gs.mapId, stay, walk, wk, seenWalk);
   }
   const need = missingNeed(m, gs);
   // a prerequisite just arrived: what blocked us before (e.g. guards wanting it) may be open now
