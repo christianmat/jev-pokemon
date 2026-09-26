@@ -441,7 +441,9 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   const HIDDEN_LABEL: [RegExp, string][] = [[/PokemonCenterPC|RedsPC|BillsHousePC/, 'Use the PC'], [/Switches/, 'Press the switch'], [/GymTrash/, 'Search the trash can'], [/GymStatues/, 'Read the gym statue'], [/CinnabarQuiz/, 'Use the quiz machine'], [/Fossil/, 'Examine the fossil'], [/Binoculars/, 'Look through binoculars']];
   for (const h of rom.hidden.get(gs.mapId) ?? []) {
     if (/HiddenItems|HiddenCoins|StartSlotMachine|CableClub/.test(h.fn)) continue;
-    const face = [0, 4, 8, 0xc].includes(h.arg) && /PC|Switches|Quiz/.test(h.fn) ? h.arg : null;
+    // these only respond when the player faces up at them (the game checks the facing direction)
+    const UP_ONLY = /Quiz|GymStatues|Binoculars|PokemonCenterPC|BillsHousePC|OakLabEmail|IndigoPlateauHQ/;
+    const face = UP_ONLY.test(h.fn) ? 4 : [0, 4, 8, 0xc].includes(h.arg) && /PC|Switches/.test(h.fn) ? h.arg : null;
     const standOk = (x: number, y: number) => {
       if (face === null) return adj(x, y, h.x, h.y);
       const [dx, dy] = face === 4 ? [0, 1] : face === 0 ? [0, -1] : face === 8 ? [1, 0] : [-1, 0];
