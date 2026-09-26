@@ -7,6 +7,8 @@ import { hopsFromMap } from './overworld.js';
 // what to pick is always decided elsewhere (by Jev).
 
 const menuRepeats = new Map<string, number>();
+/** per menu (by its options): the answer given the last times it was open, and how many times in a row */
+const menuHistory = new Map<string, { choice: string; streak: number }>();
 
 export interface Label { text: string; x: number; y: number; index?: number }
 
@@ -295,9 +297,14 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     for (let i = 0; i < 10 && (ctx.gs.screen().cursor || ctx.gs.screen().hasTextBox); i++) tap(ctx, 'B', 20);
     return CLOSE;
   }
+  const histKey = opts.map((o) => o.text).join('|');
+  const hist = menuHistory.get(histKey);
+  if (hist && hist.streak >= 2 && criteria[hist.choice]) criteria[hist.choice] += ` Chosen the last ${hist.streak} times this menu was open.`;
   const focus = ctx.mem.intent?.value;
   const choice = await ctx.jev.choose(purpose, { ...situation(ctx), currentFocus: focus, screen: screenText }, `A menu is open on screen.${focus ? ` The player's current focus is: ${focus}.` : ''} Which option best serves that focus and the objective?${/BUY|MONEY/.test(screenText) ? ` Money: ¥${ctx.gs.money}.` : ' Item rule: only use an item where it actually works (Poké Balls only in wild battles, healing items only on hurt Pokémon, TMs/HMs to teach moves outside battle).'} Rule: if this same menu keeps coming back after your answer, your last answer isn't working — choose a different option.${repeats >= 2 ? ` This exact menu has appeared ${repeats} times.` : ''}`, criteria);
   remember(ctx.mem.actions, `menu[${opts.map((o) => o.text).join('|')}] -> ${choice}`, 12);
+  menuHistory.set(histKey, { choice, streak: hist?.choice === choice ? hist.streak + 1 : 1 });
+  if (menuHistory.size > 300) menuHistory.clear();
   ctx.log('decision', `menu → ${choice}`, { options: opts.map((o) => o.text) });
   if (/^(TM|HM)\d\d$|^RARE CANDY$/.test(choice)) ctx.mem.lastItem = choice;
   // BILL's PC bookkeeping: which list we're in, and when the PC is left
