@@ -290,9 +290,12 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   const pcDist = serviceDist(/POKECENTER/), martDist = serviceDist(/_MART$/);
   lastServiceDist = { pc: pcDist, mart: martDist };
   const hereReg = hereRegion ? [hereRegion] : [];
-  // the "by layout" view ignores gates and boulders: no Pokémon Center / Mart direction claims from it
-  const svc = (regions: string[]) => {
-    if (mem.gatedRoute) return '';
+  // the "by layout" view treats other floors' boulders as floor, which can fake a way to a Pokémon Center through
+  // them: in that view, no Pokémon Center / Mart claims for destinations on floors that have boulders
+  const hasBoulders = (mapId: number) => !!rom.maps.get(mapId)?.objects.some((o) => SPRITES[o.sprite] === 'BOULDER');
+  const svc = (regions0: string[]) => {
+    const regions = mem.gatedRoute ? regions0.filter((r) => !hasBoulders(+r.split(':')[0])) : regions0;
+    if (!regions.length) return '';
     const f = (d: Map<string, number>, label: string) => {
       const here = Math.min(Infinity, ...hereReg.map((r) => d.get(r) ?? Infinity));
       const there = Math.min(Infinity, ...regions.map((r) => d.get(r) ?? Infinity));
