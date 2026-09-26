@@ -1130,7 +1130,10 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
   const tried = ctx.mem.triedNoProgress;
   const tk = (c: Candidate) => `${ctx.gs.mapName}:${c.key}`;
   const towardObjective = (c: Candidate) => /Leads toward the objective|objective is in this place/.test(c.desc);
-  let pool = cands.filter((c) => towardObjective(c) || (tried[tk(c)] ?? 0) < MAX_REPEATS_NO_PROGRESS);
+  // boulder puzzles reset when you leave: activating STRENGTH and the same pushes are needed again each attempt
+  // (push options carry their own facts), so the repeat rule doesn't apply to them
+  const exempt = (c: Candidate) => c.target.kind === 'strength' || c.target.kind === 'push';
+  let pool = cands.filter((c) => towardObjective(c) || exempt(c) || (tried[tk(c)] ?? 0) < MAX_REPEATS_NO_PROGRESS);
   if (!pool.length) { ctx.mem.triedNoProgress = {}; pool = cands; }
   const criteria: Record<string, string> = {};
   const FOCUS: Record<string, RegExp> = {
@@ -1142,7 +1145,7 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
     progress: /Leads toward the objective|objective is in this place|objective takes place|Mentioned in the current objective|changes which gates are closed/,
   };
   for (const c of pool) {
-    const n = tried[tk(c)] ?? 0;
+    const n = exempt(c) ? 0 : tried[tk(c)] ?? 0;
     const fits = FOCUS[intent]?.test(`${c.key} ${c.desc}`) ? ' Matches your current focus.' : '';
     criteria[c.key] = c.desc + fits + (n ? ` ALREADY TRIED ${n} time(s) since the last progress and nothing changed.` : '');
   }
@@ -1171,7 +1174,7 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
     ctx.log('info', `"${ans.choice}" already tried ${tried[`${ctx.gs.mapName}:${ans.choice}`]}x with no change → trying "${key}" instead`);
   }
   const c = pool.find((k) => k.key === key)!;
-  tried[tk(c)] = (tried[tk(c)] ?? 0) + 1;
+  if (!exempt(c)) tried[tk(c)] = (tried[tk(c)] ?? 0) + 1;
   const uk = `${ctx.gs.mapName}:${c.key}`;
   ctx.mem.usedTargets[uk] = (ctx.mem.usedTargets[uk] ?? 0) + 1;
   agent.noteDecision(`${ctx.gs.mapName}: ${c.key}`);
