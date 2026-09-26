@@ -464,9 +464,13 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
         return then !== undefined && (now === undefined || then < now) ? ` After pressing it: toward the nearest ${label} (${then} areas).` : '';
       };
       const svcNote = svcAfter('POKECENTER', 'Pokémon Center') + svcAfter('_MART$', 'Poké Mart');
+      // compare with NOT pressing, standing at the same switch (walking there can already change the distance)
+      const ra = rg.regionAt(gs.mapId, h.x, h.y + 1);
+      const without = ra ? (inObjective(gs.mapId, [ra]) ? 0 : dist.get(ra)) : undefined;
+      const nowTxt = without !== undefined ? `${without} without pressing` : 'not reachable without pressing';
       flipFact = svcNote + (after === undefined ? ' After pressing it (all gates flip), the objective would not be reachable from here.'
-        : after < hereHops ? ` Pressing it leads toward the objective: all gates flip, and the objective is then ${after} area(s) away (now ${isFinite(hereHops) ? hereHops : 'not reachable'}).`
-        : ` Pressing it flips all gates; the objective is then ${after} area(s) away (now ${isFinite(hereHops) ? hereHops : 'not reachable'}).`);
+        : without === undefined || after < without ? ` Pressing it leads toward the objective: all gates flip, and the objective is then ${after} area(s) away (${nowTxt}).`
+        : ` Pressing it flips all gates; the objective is then ${after} area(s) away (${nowTxt}), so pressing doesn't bring it closer.`);
     }
     const sw = label === 'Press the switch' ? ` Switches in this building open some gates and close others.${!mem.gatedRoute ? '' : noEff ? ` The way to the objective is closed by a gate right now, and it was still closed after pressing a switch here ${noEff} time(s) (each press flips the same gates back and forth).` : ' The way to the objective is closed by a gate right now; this switch changes which gates are closed.'}` : '';
     add(`${label} at (${h.x},${h.y})`, (said ? `Examined before: "${clip(said)}".` : 'Not examined yet.') + pcObj + (flipFact || sw), { kind: 'hidden', x: h.x, y: h.y, face }, path);
