@@ -113,7 +113,13 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   mem.needsMissing = need?.what;
   // a new badge / objective / item can open what stopped us before: forget the "did not get through" counts then
   const blockSig = `${gs.badges}|${currentMilestone(gs).index}|${gs.bag().map((i) => i.name).sort().join(',')}`;
-  if (mem.blockSig !== undefined && mem.blockSig !== blockSig) { mem.blockedExits = {}; mem.trapSquares = {}; }
+  if (mem.blockSig !== undefined && mem.blockSig !== blockSig) mem.blockedExits = {};
+  // push-back squares: forget them on a new badge / objective / a newly obtained item (a key), not when items get used up
+  const trapSig = `${gs.badges}|${currentMilestone(gs).index}`;
+  const newItem = gs.bag().some((i) => !(mem.trapBag ?? []).includes(i.name));
+  if ((mem.trapSig !== undefined && mem.trapSig !== trapSig) || (mem.trapBag && newItem)) mem.trapSquares = {};
+  mem.trapSig = trapSig;
+  mem.trapBag = [...new Set([...(mem.trapBag ?? []), ...gs.bag().map((i) => i.name)])];
   mem.blockSig = blockSig;
   const needsItem = !!need;
   const objMaps = (need ? need.maps : m?.maps ?? []).map((n) => Object.entries((gen as any).maps).find(([, v]: any) => v.name === n)?.[0]).filter(Boolean).map(Number);
