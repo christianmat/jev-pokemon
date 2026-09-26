@@ -681,6 +681,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
         // dead ends first, so they aren't buried after the distances
         !feature && pushable.length === 0 ? 'After this push the boulder cannot be pushed from any side.' : '',
         !feature && pushable.length > 0 && lost ? 'After this push no sequence of pushes can bring this boulder onto a floor switch anymore.' : '',
+        mem.stuckPushes?.[`${gs.mapName}:Push boulder at (${b.x},${b.y}) ${d}`] ? `Made ${mem.stuckPushes[`${gs.mapName}:Push boulder at (${b.x},${b.y}) ${d}`]} time(s) in earlier attempts; each time the boulder was stuck afterwards.` : '',
         sw,
         // like the building switches: the closed way and what opens it (a visible floor switch)
         mem.gatedRoute && freeSw.length ? 'The way to the objective is closed by a gate right now; a boulder resting on a floor switch opens it.' : '',
@@ -1200,6 +1201,11 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
   }
   const c = pool.find((k) => k.key === key)!;
   if (!exempt(c)) tried[tk(c)] = (tried[tk(c)] ?? 0) + 1;
+  // remember pushes that strand the boulder, across visits (boulders reset when you leave, the memory doesn't)
+  if (c.target.kind === 'push' && /cannot be pushed from any side|no sequence of pushes/.test(c.desc)) {
+    const sk = `${ctx.gs.mapName}:${c.key}`;
+    (ctx.mem.stuckPushes ??= {})[sk] = (ctx.mem.stuckPushes[sk] ?? 0) + 1;
+  }
   const uk = `${ctx.gs.mapName}:${c.key}`;
   ctx.mem.usedTargets[uk] = (ctx.mem.usedTargets[uk] ?? 0) + 1;
   agent.noteDecision(`${ctx.gs.mapName}: ${c.key}`);

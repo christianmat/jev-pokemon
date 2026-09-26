@@ -66,7 +66,8 @@ export interface Memory {
   /** an open PC session: menu choices since the last change to team/box/bag */
   pcSession?: { steps: number; sig: string };
   boulderBest?: Record<string, number>;
-  boulderGains?: number; // times a boulder got closer to a switch than before on the same visit // 'MAP#visit' -> closest a boulder got to a floor switch (puzzle progress)
+  boulderGains?: number;
+  stuckPushes?: Record<string, number>; // 'MAP:push key' -> times that push left the boulder stuck (any visit) // times a boulder got closer to a switch than before on the same visit // 'MAP#visit' -> closest a boulder got to a floor switch (puzzle progress)
   bestHops: Record<number, number>; // milestone index -> closest region distance to its objective reached so far // 'MAP:option' -> times it didn't get through // action -> times chosen since the last real progress // cached overworld intent + the situation it was chosen in
 }
 
