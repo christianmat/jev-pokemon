@@ -347,8 +347,10 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       });
       // a boulder in the way: does any single push (to open floor) actually clear that path?
       const pushClears = (sp: { x: number; y: number }) => Object.values(DIRS).some(([dx, dy]) => {
-        const tx = sp.x + dx, ty = sp.y + dy;
-        if (!g.walkable(sp.x - dx, sp.y - dy) || !g.walkable(tx, ty) || blocked.has(`${tx},${ty}`)) return false;
+        const tx = sp.x + dx, ty = sp.y + dy, sx = sp.x - dx, sy = sp.y - dy;
+        if (!g.walkable(sx, sy) || !g.walkable(tx, ty) || blocked.has(`${tx},${ty}`) || (tx === px && ty === py)) return false;
+        // the player has to be able to get behind it
+        if (!(sx === px && sy === py) && !findPath(g, px, py, (x, y) => x === sx && y === sy, { blocked, surf, maxNodes: 4000 })) return false;
         const moved = new Set(blocked); moved.delete(`${sp.x},${sp.y}`); moved.delete(`${w.x},${w.y}`); moved.add(`${tx},${ty}`);
         return !!findPath(g, px, py, (x, y) => x === w.x && y === w.y, { blocked: moved, surf });
       });
