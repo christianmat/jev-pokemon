@@ -684,21 +684,18 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
         return isFinite(after) && isFinite(now) && after < now;
       };
       const sw = freeSw.length && feature?.kind !== 'switch'
-        ? `Floor switch${freeSw.length > 1 ? 'es' : ''} on this floor at ${freeSw.map((f) => `(${f.x},${f.y})`).join(', ')}; after this push the boulder is ${dTxt(near(tx, ty))} from the nearest over open floor (now ${dTxt(near(b.x, b.y))}).` : '';
+        ? `Floor switch at ${freeSw.map((f) => `(${f.x},${f.y})`).join(', ')}: the boulder would be ${dTxt(near(tx, ty))} from it over open floor (now ${dTxt(near(b.x, b.y))}).` : '';
+      // what sets the pushes apart comes first; the gate note is on "Activate STRENGTH" and the reset note on the exits
       const facts = [
         `Moves the boulder one square ${d} to (${tx},${ty}).`,
         feature ? `That square is a ${feature.kind === 'switch' ? 'floor switch' : 'hole in the floor'}.` : '',
-        // dead ends first, so they aren't buried after the distances
+        // closer to the switch without stranding the boulder: toward the objective (same idea as "Pressing it leads toward the objective")
+        mem.gatedRoute && freeSw.length && !feature && pushable.length > 0 && !lost && closerByPushes() ? 'Leads toward the objective: brings the boulder closer to the floor switch.' : '',
+        feature?.kind === 'switch' && mem.gatedRoute ? 'Leads toward the objective: puts the boulder on the floor switch.' : '',
         !feature && pushable.length === 0 ? 'After this push the boulder cannot be pushed from any side.' : '',
         !feature && pushable.length > 0 && lost ? 'After this push no sequence of pushes can bring this boulder onto a floor switch anymore.' : '',
         mem.stuckPushes?.[`${gs.mapName}:Push boulder at (${b.x},${b.y}) ${d}`] ? `Made ${mem.stuckPushes[`${gs.mapName}:Push boulder at (${b.x},${b.y}) ${d}`]} time(s) in earlier attempts; each time the boulder was stuck afterwards.` : '',
         sw,
-        // like the building switches: the closed way and what opens it (a visible floor switch)
-        mem.gatedRoute && freeSw.length ? 'The way to the objective is closed by a gate right now; a boulder resting on a floor switch opens it.' : '',
-        // closer to the switch without stranding the boulder: toward the objective (same idea as "Pressing it leads toward the objective")
-        mem.gatedRoute && freeSw.length && !feature && pushable.length > 0 && !lost && closerByPushes() ? 'Leads toward the objective: brings the boulder closer to the floor switch.' : '',
-        feature?.kind === 'switch' && mem.gatedRoute ? 'Leads toward the objective: puts the boulder on the floor switch.' : '',
-        'Boulders go back to their starting spots when you leave this area.',
       ].filter(Boolean).join(' ');
       add(`Push boulder at (${b.x},${b.y}) ${d}`, facts, { kind: 'push', x: b.x, y: b.y, dir: d }, path);
     }
