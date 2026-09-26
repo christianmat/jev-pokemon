@@ -454,6 +454,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     // the objective's own spot (e.g. the item the objective names): say so
     const isGoalSpot = !!at && at.map === gs.mapName && at.x === sp.x && at.y === sp.y ? ' The objective is in this place: this is what the current objective is about.' : '';
     const facts = `${kind} at (${sp.x},${sp.y}).${isGoalSpot}${bagFullNote}${inGoal}${said ? ` Last time they said: "${clip(said)}".` : ' Not yet talked to.'}${spriteName === 'NURSE' ? ' Heals the whole party.' : ''}${spriteName === 'CLERK' ? ' Shop clerk: buy items.' : ''}`;
+    if (spriteName === 'BOULDER' && said && gs.u8('wStatusFlags1') & 1) continue;
     const label = obj?.item != null ? `Pick up item ball at (${sp.x},${sp.y})` : OBJECTS[spriteName] ? `Examine the ${spriteName.toLowerCase().replace(/_/g, ' ')} at (${sp.x},${sp.y})` : `Talk to ${obj?.trainer ? who : spriteName} at (${sp.x},${sp.y})`;
     add(label, blockers.has(sp.index) ? `${facts} ${blockers.get(sp.index)}` : facts, { kind: 'npc', index: sp.index, x: sp.x, y: sp.y, sprite: spriteName }, path);
   }
@@ -640,7 +641,32 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       const n = switchPushes(b, bx0, by0, px0, py0, sws);
       return isNaN(n) || isFinite(n);
     };
-    const swFree = (FLOOR_FEATURES[gs.mapName] ?? []).some((f) => f.kind === 'switch' && !boulders.some((o) => o.x === f.x && o.y === f.y));
+    const freeSwitches = (FLOOR_FEATURES[gs.mapName] ?? []).filter((f) => f.kind === 'switch' && !boulders.some((o) => o.x === f.x && o.y === f.y));
+    const reachNow = new Map<number, boolean>();
+    const canReachNow = (b: { index: number; x: number; y: number }) => {
+      if (!reachNow.has(b.index)) reachNow.set(b.index, switchReachable(b, b.x, b.y, px, py, freeSwitches));
+      return reachNow.get(b.index)!;
+    };
+    // squares the player can walk to, and whether moving this boulder lets them reach a door they can't reach now
+    const walkSet = (blk: Set<string>) => {
+      const seen = new Set([`${px},${py}`]), q = [[px, py]];
+      while (q.length) {
+        const [x, y] = q.pop()!;
+        for (const [ex, ey] of Object.values(DIRS)) {
+          const nx = x + ex, ny = y + ey, k = `${nx},${ny}`;
+          if (seen.has(k) || !g.walkable(nx, ny) || blk.has(k)) continue;
+          seen.add(k); q.push([nx, ny]);
+        }
+      }
+      return seen;
+    };
+    const doorsReached = (sq: Set<string>) => new Set((md?.warps ?? []).filter((w) => Object.values(DIRS).some(([ex, ey]) => sq.has(`${w.x + ex},${w.y + ey}`))).map((w) => `${w.x},${w.y}`));
+    const doorsNow = doorsReached(walkSet(blocked));
+    const opensWay = (b: { x: number; y: number }, tx: number, ty: number) => {
+      const moved = new Set(blocked); moved.delete(`${b.x},${b.y}`); moved.add(`${tx},${ty}`);
+      return [...doorsReached(walkSet(moved))].some((k) => !doorsNow.has(k));
+    };
+    const swFree = freeSwitches.length > 0;
     const gateNote = mem.gatedRoute && swFree ? ' The way to the objective is closed by a gate right now; a boulder resting on a floor switch opens it.' : '';
     if (!(gs.u8('wStatusFlags1') & 1)) add('Activate STRENGTH', `Lets the player push boulders on this map.${gateNote}`, { kind: 'strength' }, []);
     else for (const b of boulders) for (const d of Object.keys(DIRS) as Dir[]) {
@@ -706,6 +732,10 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
         mem.stuckPushes?.[`${gs.mapName}:Push boulder at (${b.x},${b.y}) ${d}`] ? `Made ${mem.stuckPushes[`${gs.mapName}:Push boulder at (${b.x},${b.y}) ${d}`]} time(s) in earlier attempts; each time the boulder was stuck afterwards.` : '',
         sw,
       ].filter(Boolean).join(' ');
+      // a push that leaves the boulder unmovable, or strands one that could still reach a switch, and opens no new
+      // way out, isn't offered
+      // (it can only be undone by leaving the floor; same rule as other options that can't lead anywhere)
+      if (freeSw.length && !feature && (pushable.length === 0 || (lost && canReachNow(b))) && !opensWay(b, tx, ty)) continue;
       add(`Push boulder at (${b.x},${b.y}) ${d}`, facts, { kind: 'push', x: b.x, y: b.y, dir: d }, path);
     }
     // no boulder can reach a free switch from where it is now: say so on the exits (leaving resets them)
