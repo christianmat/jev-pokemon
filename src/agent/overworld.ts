@@ -677,7 +677,7 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   const leftMart = ctx.mem.intent?.value === 'shop' && !/MART/.test(gs.mapName) && lastMapWasMart;
   lastMapWasMart = false; // one-shot: only the first decision after leaving a Mart
   const done = (ctx.mem.intent?.value === 'heal' && healed) || leftMart || (ctx.mem.intent?.value === 'shop' && !!ctx.mem.shopDone) || (ctx.mem.intent?.value === 'team' && !!ctx.mem.pcDone);
-  if (done && ctx.mem.intent?.value === 'team') ctx.mem.teamSig = teamSignature(ctx);
+  if (done && ctx.mem.intent?.value === 'team') { ctx.mem.teamSig = teamSignature(ctx); ctx.mem.teamAt = Date.now(); }
   if (done && ctx.mem.intent?.value === 'shop') { ctx.mem.shopMoney = gs.money; ctx.mem.shopAt = Date.now(); }
   if (done) { ctx.mem.shopDone = false; ctx.mem.pcDone = false; }
   if (!done && ctx.mem.intent?.key === key && (ctx.mem.intent.age = (ctx.mem.intent.age ?? 0) + 1) <= FOCUS_TTL) return ctx.mem.intent.value;
@@ -710,7 +710,8 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   // swapping is only possible with Pokémon in the box
   const box = gs.box();
   // offered only when there's something in the box, and the team/box changed since the PC was last used
-  const boxLearner = !!ctx.mem.fieldMoveNeeded && (() => { const l = fieldMoveLearners(ctx, ctx.mem.fieldMoveNeeded!); return l.box.length > 0 || l.afterEvolving.some((t) => t.startsWith('in the PC box')); })();
+  // (re-offered for that reason at most every 15 minutes, like the shop)
+  const boxLearner = !!ctx.mem.fieldMoveNeeded && Date.now() - (ctx.mem.teamAt ?? 0) > 15 * 60_000 && (() => { const l = fieldMoveLearners(ctx, ctx.mem.fieldMoveNeeded!); return l.box.length > 0 || l.afterEvolving.some((t) => t.startsWith('in the PC box')); })();
   if (box.length && (ctx.mem.teamSig !== teamSignature(ctx) || boxLearner)) {
     const lvls = party.map((p) => p.level);
     criteria.team = `${INTENTS.team}${weakNote ? ` ${weakNote}` : ''} In the box: ${box.map((m) => `${m.nickname} (${m.species} Lv${m.level}, ${m.types.join('/')})`).join(', ')}. Team: ${party.map((p) => `${p.nickname} (${p.species} Lv${p.level}, ${p.types.join('/')})`).join(', ')}. Team levels range ${Math.min(...lvls)}-${Math.max(...lvls)}.`;

@@ -318,6 +318,8 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     ctx.log('info', `menu came back ${repeats} times → backing out`);
     menuRepeats.delete(seenKey);
     for (let i = 0; i < 10 && (ctx.gs.screen().cursor || ctx.gs.screen().hasTextBox); i++) tap(ctx, 'B', 20);
+    // backing out of the PC ends that PC session like logging off does (otherwise the team focus walks right back)
+    if (ctx.mem.pcMode || ctx.mem.pcSession) { ctx.mem.pcDone = true; ctx.mem.pcMode = undefined; ctx.mem.pcSession = undefined; }
     return CLOSE;
   }
   const histKey = opts.map((o) => o.text).join('|');

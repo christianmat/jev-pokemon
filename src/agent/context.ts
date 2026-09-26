@@ -33,6 +33,8 @@ export interface Memory {
   needsMissing?: string;
   /** when the last shop focus ended (ms since epoch) */
   shopAt?: number;
+  /** when the last team focus ended (ms since epoch) */
+  teamAt?: number;
   /** a field move no party Pokémon knows that the way to the objective needs (set by the overworld) */
   fieldMoveNeeded?: 'CUT' | 'SURF';
   /** whole-team losses by map: how many, and the team (species + levels) at the last one */
