@@ -410,7 +410,9 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     // named people from the objective text (e.g. MR_FUJI ~ "Mr. Fuji", GIOVANNI, BILL)
     const letters = (t: string) => t.toUpperCase().replace(/[^A-Z]/g, '');
     const inGoal = spriteName.length > 3 && !/^(ROCKET|GIRL|BOY|GUARD|NURSE|CLERK|SUPER_NERD|YOUNGSTER|LASS)$/.test(spriteName) && letters(m?.goal ?? '').includes(letters(spriteName)) ? ' Mentioned in the current objective.' : '';
-    const facts = `${kind} at (${sp.x},${sp.y}).${bagFullNote}${inGoal}${said ? ` Last time they said: "${clip(said)}".` : ' Not yet talked to.'}${spriteName === 'NURSE' ? ' Heals the whole party.' : ''}${spriteName === 'CLERK' ? ' Shop clerk: buy items.' : ''}`;
+    // the objective's own spot (e.g. the item the objective names): say so
+    const isGoalSpot = !!at && at.map === gs.mapName && at.x === sp.x && at.y === sp.y ? ' The objective is in this place: this is what the current objective is about.' : '';
+    const facts = `${kind} at (${sp.x},${sp.y}).${isGoalSpot}${bagFullNote}${inGoal}${said ? ` Last time they said: "${clip(said)}".` : ' Not yet talked to.'}${spriteName === 'NURSE' ? ' Heals the whole party.' : ''}${spriteName === 'CLERK' ? ' Shop clerk: buy items.' : ''}`;
     const label = obj?.item != null ? `Pick up item ball at (${sp.x},${sp.y})` : OBJECTS[spriteName] ? `Examine the ${spriteName.toLowerCase().replace(/_/g, ' ')} at (${sp.x},${sp.y})` : `Talk to ${obj?.trainer ? who : spriteName} at (${sp.x},${sp.y})`;
     add(label, blockers.has(sp.index) ? `${facts} ${blockers.get(sp.index)}` : facts, { kind: 'npc', index: sp.index, x: sp.x, y: sp.y, sprite: spriteName }, path);
   }
