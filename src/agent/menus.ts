@@ -202,6 +202,14 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     if (/^(HM|TM)\d\d$/.test(label)) return inBattle ? 'Unusable in battle.' : 'Teaches a move to a Pokémon.';
     return '';
   };
+  // item submenu and the TM "Teach X to a POKéMON?" prompt
+  MENU_FACTS.USE = 'Use this item now.';
+  MENU_FACTS.TOSS = 'Throw this item away (it is gone for good).';
+  const teach = screenText.replace(/\s*\/\s*/g, ' ').match(/Teach ([A-Z0-9 .'-]+?) to a POK/);
+  if (teach) {
+    MENU_FACTS.YES = `Pick a Pokémon to learn ${teach[1]}.`;
+    MENU_FACTS.NO = `Don't teach ${teach[1]} now; the TM goes back into the bag.`;
+  }
   // what YES/NO does on the move-learning prompts (the game alternates between them until one is YES)
   const flat = screenText.replace(/\s*\/\s*/g, ' ');
   const learn = flat.match(/room for ([A-Z0-9 .'-]+?)\?/) ?? flat.match(/Abandon learning ([A-Z0-9 .'-]+?)\?/);
