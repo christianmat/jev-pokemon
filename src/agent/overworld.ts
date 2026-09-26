@@ -858,6 +858,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       const destName = rom.maps.get(c.target.dest)?.name ?? '';
       if (lostAt === 'the Elite Four' ? E4_ROOMS.test(destName) : destName === lostAt) out.splice(out.indexOf(c), 1);
     }
+    // moving on isn't offered while that holds, so exits carry no toward/away-from-the-objective claims either
+    for (const c of out) c.desc = c.desc.replace(/ ?(Leads toward the objective|Leads away from the objective|Same distance from the objective|Does not lead toward the objective) \((?:[^()]|\([^()]*\))*\)( \(by the map layout[^)]*\))?\./g, '').trim();
   }
   // can a Pokémon Center be reached from here at all? (a heal focus with no way to one isn't offered)
   healReachable = { map: gs.mapId, ok: /POKECENTER/.test(gs.mapName) || out.some((c) => /Pokémon Center/.test(c.desc) || c.key.includes('NURSE')),
