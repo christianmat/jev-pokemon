@@ -847,6 +847,15 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       if (c.target.kind === 'explore' || away) out.splice(out.indexOf(c), 1);
     }
   }
+  // the same team keeps losing at a place: while that holds (see the intent rule), its entrance isn't offered either
+  const lostAt = lossBlockedPlace(ctx);
+  if (lostAt && !(lostAt === 'the Elite Four' && E4_ROOMS.test(gs.mapName)) && gs.mapName !== lostAt) {
+    for (const c of [...out]) {
+      if (c.target.kind !== 'warp' && c.target.kind !== 'exit') continue;
+      const destName = rom.maps.get(c.target.dest)?.name ?? '';
+      if (lostAt === 'the Elite Four' ? E4_ROOMS.test(destName) : destName === lostAt) out.splice(out.indexOf(c), 1);
+    }
+  }
   // can a Pokémon Center be reached from here at all? (a heal focus with no way to one isn't offered)
   healReachable = { map: gs.mapId, ok: /POKECENTER/.test(gs.mapName) || out.some((c) => /Pokémon Center/.test(c.desc) || c.key.includes('NURSE')),
     mart: /MART/.test(gs.mapName) || out.some((c) => /Poké Mart/.test(c.desc) || c.key.includes('CLERK')) };
@@ -1033,6 +1042,18 @@ const FLOOR_FEATURES: Record<string, { x: number; y: number; kind: 'switch' | 'h
 function openTargets(gs: Ctx["gs"], boulders: { x: number; y: number }[]) {
   return (FLOOR_FEATURES[gs.mapName] ?? []).filter((f) => !gs.event(f.event) && !boulders.some((o) => o.x === f.x && o.y === f.y));
 }
+
+/** The place the same team keeps losing at (2+ whole-team losses, team unchanged since): 'progress' is blocked there. */
+function lossBlockedPlace(ctx: Ctx): string | null {
+  const party = ctx.gs.party();
+  const lineup = (t: string) => t.split(', ').map((x) => x.replace(/ Lv\d+$/, '')).sort().join(',');
+  const levels = (t: string) => t.split(', ').reduce((a, x) => a + +(x.match(/Lv(\d+)$/)?.[1] ?? 0), 0);
+  const teamNow = party.map((p) => `${p.species} Lv${p.level}`).join(', ');
+  const movesNow = party.flatMap((p) => p.moves.map((m) => m.name)).sort().join(',');
+  const hit = Object.entries(ctx.mem.losses ?? {}).find(([, l]) => l.count >= 2 && lineup(l.team) === lineup(teamNow) && levels(teamNow) - levels(l.team) < 5 && (!l.moves || l.moves === movesNow));
+  return hit ? hit[0] : null;
+}
+const E4_ROOMS = /^(LORELEIS|BRUNOS|AGATHAS|LANCES|CHAMPIONS)_ROOM$/;
 
 const FOCUS_TTL = 30;
 let lastMapWasMart = false;
