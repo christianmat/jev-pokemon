@@ -165,7 +165,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   let hereHops = inObjective(gs.mapId, [hereRegion]) ? 0 : (hereRegion ? dist.get(hereRegion) : undefined) ?? Infinity;
   // in a switch-gated building: routes may need a switch press on the way (both switch positions, presses as steps)
   switchAfter = null;
-  const gatedHere = SWITCH_GATES.some((x) => x.map === gs.mapName) && objMaps.some((id) => SWITCH_GATES.some((x) => x.map === mapName(id)));
+  // (whenever we're inside the building: its gates decide the way out too, whatever the objective)
+  const gatedHere = SWITCH_GATES.some((x) => x.map === gs.mapName);
   if (gatedHere) {
     const on = gs.event(SWITCH_EVENT);
     const ck = `switch:${!on}|${capabilities(ctx).cut}|${capabilities(ctx).surf}`;
