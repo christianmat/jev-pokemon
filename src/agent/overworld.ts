@@ -1024,7 +1024,7 @@ export async function execute(ctx: Ctx, c: Candidate, agent: Agent): Promise<Wal
       const g = buildGrid(ctx.emu, ctx.rom, gs);
       // never pace onto a warp (ladders/exits) or a hole
       const noStep = new Set([...(ctx.rom.maps.get(gs.mapId)?.warps ?? []).map((w) => `${w.x},${w.y}`), ...HOLES.filter((h) => h.from === gs.mapName).map((h) => `${h.x},${h.y}`)]);
-      for (let i = 0; i < 40 && !gs.inBattle && !gs.screen().hasTextBox; i++) {
+      for (let i = 0; i < 80 && !gs.inBattle && !gs.screen().hasTextBox; i++) {
         const opts = (Object.keys(DIRS) as Dir[]).filter((d) => { const [dx, dy] = DIRS[d]; return g.wild(gs.x + dx, gs.y + dy) && !noStep.has(`${gs.x + dx},${gs.y + dy}`); });
         if (!opts.length) break;
         walk(ctx, [{ dir: opts[Math.floor(Math.random() * opts.length)], x: 0, y: 0 }]);
@@ -1304,6 +1304,8 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
     catch: /tall grass|meet wild Pokémon|Wild Pokémon appear there/,
     progress: /Leads toward the objective|objective is in this place|objective takes place|Mentioned in the current objective|changes which gates are closed|opens it\./,
   };
+  // wild Pokémon right here: exits to other wild places aren't the focus match (walking between them meets fewer)
+  if ((intent === 'train' || intent === 'catch') && pool.some((c) => c.target.kind === 'grass')) FOCUS[intent] = /tall grass|meet wild Pokémon/;
   for (const c of pool) {
     const n = exempt(c) ? 0 : tried[tk(c)] ?? 0;
     const fits = FOCUS[intent]?.test(`${c.key} ${c.desc}`) ? ' Matches your current focus.' : '';
