@@ -23,6 +23,8 @@ export function closeMenus(ctx: Ctx) {
 /** START → POKéMON → slot → field move (CUT/SURF/STRENGTH/FLASH/...). */
 export function useFieldMove(ctx: Ctx, slot: number, move: string): boolean {
   if (!openStart(ctx) || !select(ctx, 'POKéMON')) { closeMenus(ctx); return false; }
+  // the party screen takes a moment to draw (a full team takes longer)
+  for (let f = 0; f < 150 && !ctx.gs.screen().rows.some((r) => r.includes('Choose a')); f += 5) ctx.emu.wait(5);
   ctx.emu.wait(20);
   if (!cursorToIndex(ctx, slot)) { closeMenus(ctx); return false; }
   const before = ctx.gs.screen().rows.join('');
