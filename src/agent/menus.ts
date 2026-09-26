@@ -278,7 +278,12 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
         const others = party.filter((q) => q !== p && q.moves.some((mm) => mm.name === m)).map((q) => q.nickname);
         return others.length ? `${m} (${others.join(', ')} also knows it)` : `${m} (no other team member knows it)`;
       });
-      return `Picking it DEPOSITS it: it leaves your team and goes into the PC box.${fm.length ? ` Knows field moves: ${fm.join(', ')}.` : ''}`;
+      // the field move the objective needs: can this one learn it (now / after evolving)?
+      const need = ctx.mem.fieldMoveNeeded;
+      const l = need ? fieldMoveLearners(ctx, need) : undefined;
+      const evo = l?.afterEvolving.find((t) => t.startsWith(`in the party: ${name} (`));
+      const hm = !need || !l ? '' : l.party.some((t) => t.startsWith(`${name} (`)) ? ` Can learn ${need} (the objective needs a team Pokémon that knows it).` : evo ? ` Can't learn ${need} now; ${evo.replace(/^in the party: [^)]*\) /, '')} (the objective needs a team Pokémon that knows ${need}).` : '';
+      return `Picking it DEPOSITS it: it leaves your team and goes into the PC box.${fm.length ? ` Knows field moves: ${fm.join(', ')}.` : ''}${hm}`;
     }
     if (ctx.mem.pcMode === 'WITHDRAW') {
       const need = ctx.mem.fieldMoveNeeded;
@@ -341,7 +346,7 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     const top = Math.max(...party.map((p) => p.level));
     const depositOk = (k: string) => {
       const p = party.find((pp) => pp.nickname === k);
-      return !!p && p.slot !== 0 && p.level < top && p.hp > 0 && !/no other team member knows it/.test(criteria[k]);
+      return !!p && p.slot !== 0 && p.level < top && p.hp > 0 && !/no other team member knows it|the objective needs a team Pokémon/.test(criteria[k]);
     };
     const alts = Object.entries(asked.probabilities).filter(([k]) => k !== CLOSE && criteria[k] && (/Picking it DEPOSITS it/.test(criteria[k]) ? depositOk(k) : !/RELEASE|TOSS|SELL|DEPOSIT/i.test(`${k} ${criteria[k]}`)));
     const total = alts.reduce((a, [, p]) => a + p + 0.05, 0);
