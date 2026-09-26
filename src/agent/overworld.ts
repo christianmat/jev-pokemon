@@ -956,8 +956,15 @@ export async function execute(ctx: Ctx, c: Candidate, agent: Agent): Promise<Wal
   switch (t.kind) {
     case 'warp': {
       emu.wait(20);
-      // carpet/edge warps need a push toward the edge
       const map0 = gs.mapId;
+      // the last step onto the warp square can be dropped (a press that only turns the player): step onto it first
+      for (let i = 0; i < 3 && gs.mapId === map0 && Math.abs(gs.x - t.x) + Math.abs(gs.y - t.y) === 1 && !gs.screen().hasTextBox; i++) {
+        const d = t.x > gs.x ? 'RIGHT' : t.x < gs.x ? 'LEFT' : t.y > gs.y ? 'DOWN' : 'UP';
+        emu.hold(d, 16);
+        emu.wait(20);
+      }
+      if (gs.mapId !== map0) return;
+      // carpet/edge warps need a push toward the edge
       const last = c.path[c.path.length - 1]?.dir;
       for (const d of [last, 'down', 'up', 'left', 'right'].filter(Boolean) as Dir[]) {
         emu.hold(d.toUpperCase() as 'UP', 16);
