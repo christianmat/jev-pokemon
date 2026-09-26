@@ -1122,7 +1122,8 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   const levels = (t: string) => t.split(', ').reduce((a, x) => a + +(x.match(/Lv(\d+)$/)?.[1] ?? 0), 0);
   const teamNow = party.map((p) => `${p.species} Lv${p.level}`).join(', ');
   const movesNow = party.flatMap((p) => p.moves.map((m) => m.name)).sort().join(',');
-  const stuckAt = Object.entries(ctx.mem.losses ?? {}).find(([, l]) => l.count >= 2 && lineup(l.team) === lineup(teamNow) && levels(teamNow) - levels(l.team) < 5 && (!l.moves || l.moves === movesNow));
+  // (not while already inside the Elite Four: there the only way is forward)
+  const stuckAt = E4_ROOMS.test(gs.mapName) ? undefined : Object.entries(ctx.mem.losses ?? {}).find(([, l]) => l.count >= 2 && lineup(l.team) === lineup(teamNow) && levels(teamNow) - levels(l.team) < 5 && (!l.moves || l.moves === movesNow));
   if (stuckAt) {
     delete (criteria as Record<string, string>).progress;
     const note = ` (Moving on toward the objective isn't offered right now: all your Pokémon fainted at ${stuckAt[0]} ${stuckAt[1].count} times with exactly this team and these levels. It is offered again once the team changes: a different lineup, a newly learned move, or 5+ levels gained in total since then.)`;
