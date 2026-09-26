@@ -77,7 +77,7 @@ export interface Step { dir: Dir; x: number; y: number; jump?: boolean; spin?: b
 export function findPath(
   g: Grid, sx: number, sy: number,
   goal: (x: number, y: number) => boolean,
-  opts: { blocked?: Set<string>; allowExit?: (x: number, y: number) => boolean; grassCost?: number; surf?: boolean; resurf?: boolean; maxNodes?: number; spinners?: Map<string, { x: number; y: number }> } = {},
+  opts: { blocked?: Set<string>; allowExit?: (x: number, y: number) => boolean; grassCost?: number; surf?: boolean; resurf?: boolean; noEnter?: (x: number, y: number, d: Dir) => boolean; maxNodes?: number; spinners?: Map<string, { x: number; y: number }> } = {},
 ): Step[] | null {
   const key = (x: number, y: number) => `${x},${y}`;
   const spin_ = opts.spinners ?? g.spinners;
@@ -115,6 +115,7 @@ export function findPath(
           if (opts.blocked?.has(nk0)) continue;
         }
         if (g.pairBlocked(g.tile(cur.x, cur.y), g.tile(nx, ny))) continue;
+        if (opts.noEnter?.(nx, ny, d)) continue;
       }
       // arrow tiles: stepping on one forces movement to its landing square (chains if it lands on another arrow)
       let spin = false, extra = 0;

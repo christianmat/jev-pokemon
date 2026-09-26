@@ -79,6 +79,19 @@ export class Rom {
     return idx >= 0 ? this.moves.get(this.tmMoves[idx]) ?? null : null;
   }
 
+  /** Tiles that warp as soon as you step on them in this tileset (warp tiles + door tiles). */
+  stepWarpTiles(tileset: number): Set<number> {
+    const out = new Set<number>();
+    const wp = sym('WarpTileIDPointers'), wb = Math.floor(wp / 0x4000);
+    for (let a = this.flat(wb, this.u16(wp + tileset * 2)); this.b[a] !== 0xff; a++) out.add(this.b[a]);
+    const dp = sym('DoorTileIDPointers'), db = Math.floor(dp / 0x4000);
+    for (let a = dp; this.b[a] !== 0xff; a += 3) {
+      if (this.b[a] !== tileset) continue;
+      for (let t = this.flat(db, this.u16(a + 1)); this.b[t] !== 0xff; t++) out.add(this.b[t]);
+    }
+    return out;
+  }
+
   private loadHidden() {
     const names = new Map<number, string>();
     for (const [n, a] of Object.entries(symbols())) if (a >= 0x4000 && !n.includes('.')) names.set(a, n);

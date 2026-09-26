@@ -567,13 +567,29 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     }
   }
   const boulders = gs.sprites().filter((s) => !s.hidden && SPRITES[s.picture] === 'BOULDER');
+  // exit mats that only warp when facing/walking toward the map edge (the game's ExtraWarpCheck, facing-edge variant):
+  // square -> the directions that would warp
+  const edgeMats = new Map<string, Dir[]>();
+  if (md && boulders.length && ![0, 13, 14, 23].includes(md.tileset) && !/^(ROCKET_HIDEOUT_B[124]F|ROCK_TUNNEL_1F)$/.test(gs.mapName)) {
+    const stepTiles = rom.stepWarpTiles(md.tileset);
+    for (const w of md.warps) {
+      if (stepTiles.has(g.tile(w.x, w.y))) continue;
+      const dirs: Dir[] = [];
+      if (w.x === 0) dirs.push('left'); if (w.x === g.w - 1) dirs.push('right');
+      if (w.y === 0) dirs.push('up'); if (w.y === g.h - 1) dirs.push('down');
+      if (dirs.length) edgeMats.set(`${w.x},${w.y}`, dirs);
+    }
+  }
   if (boulders.length && slotWithMove(ctx, 'STRENGTH') >= 0 && gs.badges & 0x08) {
     if (!(gs.u8('wStatusFlags1') & 1)) add('Activate STRENGTH', 'Lets the player push boulders on this map.', { kind: 'strength' }, []);
     else for (const b of boulders) for (const d of Object.keys(DIRS) as Dir[]) {
       const [dx, dy] = DIRS[d];
       const sx = b.x - dx, sy = b.y - dy, tx = b.x + dx, ty = b.y + dy;
       if (!g.walkable(sx, sy) || !g.walkable(tx, ty) || blocked.has(`${tx},${ty}`)) continue;
-      const path = sx === px && sy === py ? [] : findPath(g, px, py, (x, y) => x === sx && y === sy, { blocked, maxNodes: 6000 });
+      // exit mats on the map edge only warp when walking toward the edge: they can be stood on to push
+      const standBlocked = new Set(blocked); for (const k of edgeMats.keys()) standBlocked.delete(k);
+      const noEnter = (x: number, y: number, dd: Dir) => edgeMats.get(`${x},${y}`)?.includes(dd) ?? false;
+      const path = sx === px && sy === py ? [] : findPath(g, px, py, (x, y) => x === sx && y === sy, { blocked: standBlocked, noEnter, maxNodes: 6000 });
       // plain facts about the result of this push (switches/holes are visible floor features in the game)
       const feature = FLOOR_FEATURES[gs.mapName]?.find((f) => f.x === tx && f.y === ty);
       const others = new Set([...blocked].filter((k) => k !== `${b.x},${b.y}`));
