@@ -35,6 +35,8 @@ export interface Memory {
   pcMode?: string;
   /** last bag item chosen (for TM/HM party-menu facts) */
   lastItem?: string;
+  /** bag items opened from the overworld and closed without effect: count (hidden after 3) */
+  itemUnused?: Record<string, number>;
   /** an open PC session: menu choices since the last change to team/box/bag */
   pcSession?: { steps: number; sig: string };
   bestHops: Record<number, number>; // milestone index -> closest region distance to its objective reached so far // 'MAP:option' -> times it didn't get through // action -> times chosen since the last real progress // cached overworld intent + the situation it was chosen in

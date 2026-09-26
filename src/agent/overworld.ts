@@ -332,7 +332,10 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     else if (/BICYCLE/.test(it.name)) desc = surfing ? '' : 'Ride the bicycle (faster travel).';
     else if (/ESCAPE ROPE/.test(it.name)) desc = 'Escape from a cave/dungeon back to the last Pokémon Center.';
     if (!desc) continue;
-    add(`Use ${it.name} from the bag`, desc, { kind: 'item', name: it.name }, []);
+    // opened before and closed without using it (nothing changed): say so, and stop offering after 3
+    const unused = mem.itemUnused?.[it.name] ?? 0;
+    if (unused >= 3) continue;
+    add(`Use ${it.name} from the bag`, `${desc}${unused ? ` Opened ${unused} time(s) before and closed without using it.` : ''}`, { kind: 'item', name: it.name }, []);
   }
 
   // Tall grass (wild encounters: train / catch)
@@ -643,12 +646,20 @@ function overworldReady(ctx: Ctx): boolean {
   return false;
 }
 let busyWaited = 0;
+let pendingItem: { name: string; sig: string } | null = null;
+const itemSig = (ctx: Ctx) => `${ctx.gs.bag().map((i) => i.name + i.qty).join(',')}|${ctx.gs.party().map((p) => p.level + p.moves.map((m) => m.name).join('+') + p.hp + p.status).join(',')}`;
 
 export async function overworldStep(ctx: Ctx, agent: Agent) {
   // a script is still running without a text box: wait for it (capped, so this can never hang)
   if (busyWaited < 1800 && !overworldReady(ctx)) { ctx.emu.wait(20); busyWaited += 24; return; }
   busyWaited = 0;
   ctx.mem.pcSession = undefined; // back in the overworld: any PC session is over
+  // a bag item opened last time: did anything change (used) or not (closed without using it)?
+  if (pendingItem) {
+    const u = (ctx.mem.itemUnused ??= {});
+    if (itemSig(ctx) === pendingItem.sig) u[pendingItem.name] = (u[pendingItem.name] ?? 0) + 1; else delete u[pendingItem.name];
+    pendingItem = null;
+  }
   resetMenuRepeats();
   if (ctx.gs.mapId !== lastDecisionMap) {
     lastMapWasMart = /MART/.test(mapName(lastDecisionMap));
@@ -736,6 +747,7 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
   const distStart = distTo();
   const tg = c.target as { kind: string; x?: number; y?: number; dir?: string };
   const edges = (destRegionsByKey.get(tg.kind === 'warp' ? `w:${tg.x},${tg.y}` : `e:${tg.dir}`) ?? []).map((r) => `${fromRegion}>${r}`);
+  if (c.target.kind === 'item') pendingItem = { name: (c.target as { name: string }).name, sig: itemSig(ctx) };
   const res = await execute(ctx, c, agent);
   const bE = (ctx.mem.blockedEdges ??= {});
   if (ctx.gs.mapId !== mapBefore) for (const e of edges) delete bE[e]; // it worked this time
