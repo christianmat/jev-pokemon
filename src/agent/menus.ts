@@ -263,7 +263,15 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   for (const o of opts) criteria[o.text] = `Menu option "${o.text}". ${pcListNote(o.text)} ${MENU_FACTS[o.text] ?? ''} ${floorFact(o.text)} ${pcFact(o.text)} ${itemRule(o.text)} ${extraFacts(o.text) || boxFacts(o.text) || partyFacts(o.text)} ${price(o.text)}`.replace(/\s+/g, ' ').trim();
   // Mechanics Jev can always use: scroll a list that has more entries, and back out of any menu.
   const MORE = 'See more items (scroll down)', CLOSE = 'Close this menu';
-  if (ctx.gs.screen().moreBelow) criteria[MORE] = 'The list has more entries below the ones shown.';
+  if (ctx.gs.screen().moreBelow) {
+    criteria[MORE] = 'The list has more entries below the ones shown.';
+    // elevators: say which floors are further down the list
+    if (/ELEVATOR/.test(ctx.gs.mapName)) {
+      const shown = new Set(opts.map((o) => o.text));
+      const rest = [...ctx.rom.maps.values()].filter((mm) => mm.warps.some((w) => w.destMap === ctx.gs.mapId)).map((mm) => mm.name.replace(/^.*_/, '')).filter((f) => !shown.has(f));
+      if (rest.length) criteria[MORE] += ` Further floors: ${rest.map((f) => { const fm = [...ctx.rom.maps.values()].find((mm) => mm.name.endsWith(`_${f}`) && mm.warps.some((w) => w.destMap === ctx.gs.mapId)); const h = fm ? hopsFromMap(fm.id) : undefined; return h !== undefined ? `${f} (${h} areas from the objective)` : f; }).join(', ')}.`;
+    }
+  }
   // (not in battle party screens: after a faint the game requires a choice and B does nothing)
   if (!opts.some((o) => /^(CANCEL|EXIT|NO|QUIT)$/.test(o.text)) && !(ctx.gs.inBattle && isPartyMenu(ctx))) criteria[CLOSE] = 'Leave this menu without choosing anything (B button).';
   const seenKey = screenText + '|' + opts.map((o) => o.text).join('|');
