@@ -1074,7 +1074,7 @@ const MAX_REPEATS_NO_PROGRESS = +(process.env.MAX_REPEATS_NO_PROGRESS ?? 5);
 const INTENTS: Record<string, string> = {
   progress: 'Move toward the current objective now.',
   heal: 'Go heal the party at a Pokémon Center.',
-  train: 'Train: fight wild Pokémon in tall grass to gain levels before the objective.',
+  train: 'Train: fight wild Pokémon (in tall grass, or anywhere in caves) to gain levels before the objective.',
   catch: 'Catch new wild Pokémon to build a stronger, more varied team.',
   shop: 'Buy supplies (Poké Balls, Potions) at a Poké Mart.',
   explore: 'Talk to people / explore this area for items or information.',
@@ -1160,7 +1160,7 @@ async function decideIntent(ctx: Ctx): Promise<string> {
     criteria.team = `${INTENTS.team}${weakNote ? ` ${weakNote}` : ''} In the box: ${box.map((m) => `${m.nickname} (${m.species} Lv${m.level}, ${m.types.join('/')})`).join(', ')}. Team: ${party.map((p) => `${p.nickname} (${p.species} Lv${p.level}, ${p.types.join('/')})`).join(', ')}. Team levels range ${Math.min(...lvls)}-${Math.max(...lvls)}.`;
   } else delete (criteria as Record<string, string>).team;
   if (noHealHere) delete (criteria as Record<string, string>).team; // the PC is in a Pokémon Center
-  criteria.train = `${INTENTS.train} Beating trainers also earns money.`;
+  if (criteria.train) criteria.train = criteria.train.replace(INTENTS.train, `${INTENTS.train} Beating trainers also earns money.`);
   if (criteria.progress && isFinite(lastHereHops)) criteria.progress = `${criteria.progress} From here the objective is ${lastHereHops} area(s) away.`;
   const { picked } = await ctx.jev.ask('intent', situation(ctx), {
     intent: { type: 'choice', instructions: 'You are playing Pokémon Red. Given the objective, the party\'s health and levels (vs the typical opponent level of the objective), money and items, what should the player focus on right now?', criteria },
