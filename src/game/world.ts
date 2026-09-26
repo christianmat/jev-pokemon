@@ -12,6 +12,8 @@ export interface Grid {
   tile: (x: number, y: number) => number;       // collision tile (bottom-left of 16x16 square)
   walkable: (x: number, y: number) => boolean;
   grass: (x: number, y: number) => boolean;
+  /** wild Pokémon can appear on this square: tall grass, or any floor square of an indoor map (cave) with wild Pokémon */
+  wild: (x: number, y: number) => boolean;
   water: (x: number, y: number) => boolean;
   cuttable: (x: number, y: number) => boolean;
   counter: (x: number, y: number) => boolean;
@@ -32,6 +34,8 @@ export function buildGrid(emu: Emulator, rom: Rom, gs: GameState): Grid {
   const passable = new Set<number>();
   for (let a = rom.flat(bank, collPtr); r[a] !== 0xff; a++) passable.add(r[a]);
   const grassTile = gs.u8('wGrassTile');
+  // TryDoWildEncounter: on maps >= FIRST_INDOOR_MAP ($25) with a grass rate, every square can have encounters (not the FOREST tileset: grass only)
+  const indoorWild = gs.mapId >= 0x25 && tileset !== 3 && gs.u8('wGrassRate') > 0;
   const tsHeader = sym('Tilesets') + tileset * 12;
   const counters = new Set([r[tsHeader + 7], r[tsHeader + 8], r[tsHeader + 9]].filter((t) => t !== 0xff));
   const ow = sym('wOverworldMap');
@@ -54,6 +58,7 @@ export function buildGrid(emu: Emulator, rom: Rom, gs: GameState): Grid {
     mapId: gs.mapId, w: W * 2, h: H * 2, tileset, tile,
     walkable: (x, y) => passable.has(tile(x, y)),
     grass: (x, y) => grassTile !== 0xff && tile(x, y) === grassTile,
+    wild: (x, y) => (grassTile !== 0xff && tile(x, y) === grassTile) || (indoorWild && passable.has(tile(x, y))),
     water: (x, y) => WATER_TILESETS.has(tileset) && tile(x, y) === 0x14,
     cuttable: (x, y) => (tileset === 0 && tile(x, y) === 0x3d) || (tileset === 7 && tile(x, y) === 0x50),
     counter: (x, y) => counters.has(tile(x, y)),

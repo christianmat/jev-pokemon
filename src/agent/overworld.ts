@@ -807,6 +807,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   // Tall grass (wild encounters: train / catch)
   const gp = findPath(g, px, py, (x, y) => g.grass(x, y), { blocked, maxNodes: 8000 });
   if (gp) add('Walk in tall grass', 'Wander in tall grass to find wild Pokémon (gain experience / catch new team members).', { kind: 'grass' }, gp);
+  // indoor maps with wild Pokémon (caves): encounters happen on any floor square, no tall grass needed
+  else if (g.wild(px, py) || [...Object.values(DIRS)].some(([dx, dy]) => g.wild(px + dx, py + dy) && !blocked.has(`${px + dx},${py + dy}`))) add('Walk around here to meet wild Pokémon', 'In this place wild Pokémon can appear on any floor square (like tall grass outdoors): walking around finds them (gain experience / catch new team members).', { kind: 'grass' }, []);
 
   // Explore unseen squares
   const seenSq = mem.stepsInMap[gs.mapName] ?? new Set();
@@ -1019,8 +1021,10 @@ export async function execute(ctx: Ctx, c: Candidate, agent: Agent): Promise<Wal
     case 'grass': {
       // pace inside the grass until something happens
       const g = buildGrid(ctx.emu, ctx.rom, gs);
+      // never pace onto a warp (ladders/exits) or a hole
+      const noStep = new Set([...(ctx.rom.maps.get(gs.mapId)?.warps ?? []).map((w) => `${w.x},${w.y}`), ...HOLES.filter((h) => h.from === gs.mapName).map((h) => `${h.x},${h.y}`)]);
       for (let i = 0; i < 40 && !gs.inBattle && !gs.screen().hasTextBox; i++) {
-        const opts = (Object.keys(DIRS) as Dir[]).filter((d) => { const [dx, dy] = DIRS[d]; return g.grass(gs.x + dx, gs.y + dy); });
+        const opts = (Object.keys(DIRS) as Dir[]).filter((d) => { const [dx, dy] = DIRS[d]; return g.wild(gs.x + dx, gs.y + dy) && !noStep.has(`${gs.x + dx},${gs.y + dy}`); });
         if (!opts.length) break;
         walk(ctx, [{ dir: opts[Math.floor(Math.random() * opts.length)], x: 0, y: 0 }]);
       }
@@ -1293,8 +1297,8 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
     heal: /Pokémon Center|heals the whole party|NURSE/,
     shop: /Poké Mart|Shop clerk|CLERK/,
     team: /Use the PC|Pokémon Center/,
-    train: /tall grass/,
-    catch: /tall grass/,
+    train: /tall grass|meet wild Pokémon/,
+    catch: /tall grass|meet wild Pokémon/,
     progress: /Leads toward the objective|objective is in this place|objective takes place|Mentioned in the current objective|changes which gates are closed|opens it\./,
   };
   for (const c of pool) {
