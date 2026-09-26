@@ -307,7 +307,8 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   }
   const histKey = opts.map((o) => o.text).join('|');
   const hist = menuHistory.get(histKey);
-  if (hist && hist.streak >= 2 && criteria[hist.choice]) criteria[hist.choice] += ` Chosen the last ${hist.streak} times this menu was open.`;
+  // only for answers that leave without doing anything (a working answer like BUY isn't a sign of a loop)
+  if (hist && hist.streak >= 2 && criteria[hist.choice] && (hist.choice === CLOSE || /^(QUIT|CANCEL|EXIT)$/.test(hist.choice))) criteria[hist.choice] += ` Chosen the last ${hist.streak} times this menu was open.`;
   const focus = ctx.mem.intent?.value;
   const asked = await ctx.jev.chooseP(purpose, { ...situation(ctx), currentFocus: focus, screen: screenText }, `A menu is open on screen.${focus ? ` The player's current focus is: ${focus}.` : ''} Which option best serves that focus and the objective?${/BUY|MONEY/.test(screenText) ? ` Money: ¥${ctx.gs.money}.` : ' Item rule: only use an item where it actually works (Poké Balls only in wild battles, healing items only on hurt Pokémon, TMs/HMs to teach moves outside battle).'} Rule: if this same menu keeps coming back after your answer, your last answer isn't working — choose a different option.${repeats >= 2 ? ` This exact menu has appeared ${repeats} times.` : ''}`, criteria);
   let choice = asked.choice;
