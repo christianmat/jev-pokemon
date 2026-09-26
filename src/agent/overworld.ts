@@ -272,9 +272,10 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     if (!isFinite(h)) return isFinite(hereHops) ? 'Does not lead toward the objective (dead end for now).' : '';
     const gate = mem.gatedRoute ? ' (by the map layout; a gate on the way is closed right now)' : '';
     if (h < hereHops) return `Leads toward the objective (${h} area(s) away from it)${gate}.`;
-    if (mem.gatedRoute) return ''; // by layout only (gates move): no 'away'/'same' claims
-    if (h > hereHops) return `Leads away from the objective (${h} areas away).`;
-    return `Same distance from the objective (${h} areas).`;
+    // switch-gated buildings: gates move with every press, so no 'away'/'same' claims from the layout there
+    if (mem.gatedRoute && SWITCH_GATES.some((x) => x.map === gs.mapName)) return '';
+    if (h > hereHops) return `Leads away from the objective (${h} areas away)${gate}.`;
+    return `Same distance from the objective (${h} areas)${gate}.`;
   };
   // distances to services (nearest Pokémon Center / Mart), for healing and shopping intents
   const serviceDist = (re: RegExp) => {
