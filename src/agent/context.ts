@@ -154,14 +154,31 @@ const HM_FOR = { CUT: { hm: 'HM01', badge: 0x02, badgeName: 'Cascade Badge' }, S
 export function fieldMoveLearners(ctx: Ctx, mv: 'CUT' | 'SURF') {
   const hmId = [...ctx.rom.items.entries()].find(([, n]) => n === HM_FOR[mv].hm)?.[0];
   const can = (speciesId: number) => hmId !== undefined && ctx.rom.canLearnMachine(speciesId, hmId);
+  // not yet, but after evolving (by level or with an item; trades aren't possible here)
+  const bag = new Set(ctx.gs.bag().map((i) => i.name));
+  const viaEvo = (speciesId: number): string | undefined => {
+    for (const e of ctx.rom.evolutions(speciesId)) {
+      if (e.method === 'trade') continue;
+      const into = ctx.rom.species.get(e.into)?.name ?? '?';
+      const how = e.method === 'level' ? `at Lv${e.level}` : `with a ${ctx.rom.items.get(e.item!) ?? 'item'} (${bag.has(ctx.rom.items.get(e.item!) ?? '') ? 'one is in the bag' : 'none in the bag'})`;
+      if (can(e.into)) return `evolves into ${into} ${how}, which can learn it`;
+      const next = viaEvo(e.into);
+      if (next) return `evolves into ${into} ${how}, then ${next}`;
+    }
+    return undefined;
+  };
+  const later = (list: { speciesId: number; nickname: string; species: string; level: number }[]) =>
+    list.filter((p) => !can(p.speciesId)).map((p) => { const v = viaEvo(p.speciesId); return v ? `${p.nickname} (${p.species} Lv${p.level}) ${v}` : ''; }).filter(Boolean);
+  const party = ctx.gs.party(), box = ctx.gs.box();
   return {
-    party: ctx.gs.party().filter((p) => can(p.speciesId)).map((p) => `${p.nickname} (${p.species} Lv${p.level})`),
-    box: ctx.gs.box().filter((b) => can(b.speciesId)).map((b) => `${b.nickname} (${b.species} Lv${b.level})`),
+    party: party.filter((p) => can(p.speciesId)).map((p) => `${p.nickname} (${p.species} Lv${p.level})`),
+    box: box.filter((b) => can(b.speciesId)).map((b) => `${b.nickname} (${b.species} Lv${b.level})`),
+    afterEvolving: [...later(party).map((t) => `in the party: ${t}`), ...later(box).map((t) => `in the PC box: ${t}`)],
   };
 }
 function fieldMoveFact(ctx: Ctx, mv: 'CUT' | 'SURF') {
   const h = HM_FOR[mv];
   const l = fieldMoveLearners(ctx, mv);
   const inBag = ctx.gs.bag().some((i) => i.name === h.hm);
-  return `The objective can't be reached from here without ${mv}, and no party Pokémon knows ${mv}. ${h.hm} teaches ${mv} (${inBag ? 'it is in the bag; HMs can be used any number of times' : 'not in the bag'}); using ${mv} outside battle needs the ${h.badgeName}${ctx.gs.badges & h.badge ? ' (you have it)' : ' (you don\'t have it yet)'}. Party Pokémon that can learn ${h.hm}: ${l.party.join(', ') || 'none'}. Pokémon in the PC box that can learn it: ${l.box.join(', ') || 'none'}.`;
+  return `The objective can't be reached from here without ${mv}, and no party Pokémon knows ${mv}. ${h.hm} teaches ${mv} (${inBag ? 'it is in the bag; HMs can be used any number of times' : 'not in the bag'}); using ${mv} outside battle needs the ${h.badgeName}${ctx.gs.badges & h.badge ? ' (you have it)' : ' (you don\'t have it yet)'}. Party Pokémon that can learn ${h.hm}: ${l.party.join(', ') || 'none'}. Pokémon in the PC box that can learn it: ${l.box.join(', ') || 'none'}.${l.afterEvolving.length ? ` Able to learn it only after evolving: ${l.afterEvolving.join('; ')}.` : ''}`;
 }

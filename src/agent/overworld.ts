@@ -710,7 +710,7 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   // swapping is only possible with Pokémon in the box
   const box = gs.box();
   // offered only when there's something in the box, and the team/box changed since the PC was last used
-  const boxLearner = !!ctx.mem.fieldMoveNeeded && fieldMoveLearners(ctx, ctx.mem.fieldMoveNeeded).box.length > 0;
+  const boxLearner = !!ctx.mem.fieldMoveNeeded && (() => { const l = fieldMoveLearners(ctx, ctx.mem.fieldMoveNeeded!); return l.box.length > 0 || l.afterEvolving.some((t) => t.startsWith('in the PC box')); })();
   if (box.length && (ctx.mem.teamSig !== teamSignature(ctx) || boxLearner)) {
     const lvls = party.map((p) => p.level);
     criteria.team = `${INTENTS.team}${weakNote ? ` ${weakNote}` : ''} In the box: ${box.map((m) => `${m.nickname} (${m.species} Lv${m.level}, ${m.types.join('/')})`).join(', ')}. Team: ${party.map((p) => `${p.nickname} (${p.species} Lv${p.level}, ${p.types.join('/')})`).join(', ')}. Team levels range ${Math.min(...lvls)}-${Math.max(...lvls)}.`;

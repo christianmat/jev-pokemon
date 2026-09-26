@@ -164,6 +164,22 @@ export class Rom {
     return out;
   }
 
+  /** All evolutions of a species: by level, by item (stone) or by trade, with the species it becomes. */
+  evolutions(id: number): { method: 'level' | 'item' | 'trade'; level?: number; item?: number; into: number }[] {
+    const table = sym('EvosMovesPointerTable');
+    const bank = Math.floor(table / 0x4000);
+    let a = this.flat(bank, this.u16(table + (id - 1) * 2));
+    const out: { method: 'level' | 'item' | 'trade'; level?: number; item?: number; into: number }[] = [];
+    for (let guard = 0; this.b[a] !== 0 && guard < 8; guard++) {
+      const method = this.b[a];
+      if (method === 1) { out.push({ method: 'level', level: this.b[a + 1], into: this.b[a + 2] }); a += 3; }
+      else if (method === 2) { out.push({ method: 'item', item: this.b[a + 1], into: this.b[a + 3] }); a += 4; }
+      else if (method === 3) { out.push({ method: 'trade', into: this.b[a + 2] }); a += 3; }
+      else break;
+    }
+    return out;
+  }
+
   /** Can this species learn the TM/HM item? (bit n of the tmhm flags = machine n+1) */
   canLearnMachine(speciesId: number, itemId: number): boolean {
     const idx = itemId >= 0xc9 ? itemId - 0xc9 : itemId >= 0xc4 ? 50 + itemId - 0xc4 : -1;
