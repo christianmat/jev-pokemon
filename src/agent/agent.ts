@@ -79,7 +79,13 @@ export class Agent {
     const ev = sym('wEventFlags');
     let events = 0;
     for (let a = ev; a < ev + 0x140; a++) for (let b = this.ctx.emu.mem[a]; b; b &= b - 1) events++;
-    const key = `${index}|${Object.keys(mem.visitedMaps).length}|${gs.badges}|${gs.party().length}|${mem.bestHops?.[index] ?? ''}|${events}`;
+    // total experience: training wins are progress too (otherwise "walk in tall grass" looks like a loop)
+    let exp = 0;
+    for (let i = 0; i < Math.min(gs.u8('wPartyCount'), 6); i++) {
+      const a = sym('wPartyMons') + i * 44 + 14;
+      exp += (this.ctx.emu.mem[a] << 16) | (this.ctx.emu.mem[a + 1] << 8) | this.ctx.emu.mem[a + 2];
+    }
+    const key = `${index}|${Object.keys(mem.visitedMaps).length}|${gs.badges}|${gs.party().length}|${mem.bestHops?.[index] ?? ''}|${events}|${Math.floor(exp / 200)}`;
     if (key !== this.lastProgressKey) { this.lastProgressKey = key; this.decisionsSinceProgress = 0; mem.triedNoProgress = {}; }
   }
 
