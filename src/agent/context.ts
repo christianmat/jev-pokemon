@@ -43,6 +43,8 @@ export interface Memory {
   subObjective?: string;
   /** since when (ms) the current field-move first step has been unmet */
   subSince?: number;
+  /** route facts come from the map layout because a gate is closed right now */
+  gatedRoute?: boolean;
   /** whole-team losses by map: how many, and the team (species + levels) at the last one */
   losses?: Record<string, { count: number; team: string; moves?: string }>;
   /** last BILL's PC mode chosen (WITHDRAW/DEPOSIT/RELEASE), for list facts */

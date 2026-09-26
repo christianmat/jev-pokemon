@@ -126,8 +126,19 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   const inObjective = (map: number, regions: (string | null)[]) => (atRegion ? regions.includes(atRegion) : objMapsNow.includes(map));
   let dist = rg.distancesTo(objRegions, skip);
   destRegionsByKey.clear();
-  const hereRegion = rg.regionAt(gs.mapId, px, py);
+  let hereRegion = rg.regionAt(gs.mapId, px, py);
   let hereHops = inObjective(gs.mapId, [hereRegion]) ? 0 : (hereRegion ? dist.get(hereRegion) : undefined) ?? Infinity;
+  // blocked only by how this map is right now (gates that switches open and close): give the layout's route anyway
+  mem.gatedRoute = false;
+  if (!isFinite(hereHops) && objMaps.length) {
+    rg.refine(gs.mapId, new Set(), undefined, 'layout');
+    const lRegion = atMap !== undefined && at ? rg.regionAt(atMap, at.x, at.y) : null;
+    const lObj = lRegion ? [lRegion] : objMaps.flatMap((id) => rg.regionsOf(id));
+    const lDist = rg.distancesTo(lObj, skip);
+    const lHere = rg.regionAt(gs.mapId, px, py);
+    const lHops = (lRegion ? lHere === lRegion : objMaps.includes(gs.mapId)) ? 0 : (lHere ? lDist.get(lHere) : undefined) ?? Infinity;
+    if (isFinite(lHops)) { atRegion = lRegion; objRegions = lObj; dist = lDist; hereRegion = lHere; hereHops = lHops; mem.gatedRoute = true; }
+  }
   // unreachable as things are: would a field move nobody knows yet (CUT / SURF) open the way? (a fact for Jev)
   mem.fieldMoveNeeded = undefined;
   mem.subObjective = undefined;
@@ -188,7 +199,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     if (hereHops === 0) return `Leaves the current area (the objective takes place in this area, ${gs.mapName}).`;
     const h = Math.min(Infinity, ...destRegions.map((r) => dist.get(r) ?? Infinity));
     if (!isFinite(h)) return isFinite(hereHops) ? 'Does not lead toward the objective (dead end for now).' : '';
-    if (h < hereHops) return `Leads toward the objective (${h} area(s) away from it).`;
+    const gate = mem.gatedRoute ? ' (by the map layout; a gate on the way is closed right now)' : '';
+    if (h < hereHops) return `Leads toward the objective (${h} area(s) away from it)${gate}.`;
     if (h > hereHops) return `Leads away from the objective (${h} areas away).`;
     return `Same distance from the objective (${h} areas).`;
   };
@@ -357,7 +369,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const k = `${gs.mapName}:hidden${h.x},${h.y}`;
     const said = mem.npcText[k];
     const pcObj = mem.subObjective?.includes('the PC box') && label === 'Use the PC' ? ' Mentioned in the current objective (the PC box).' : '';
-    add(`${label} at (${h.x},${h.y})`, (said ? `Examined before: "${clip(said)}".` : 'Not examined yet.') + pcObj, { kind: 'hidden', x: h.x, y: h.y, face }, path);
+    const sw = label === 'Press the switch' ? ' Switches in this building open some gates and close others.' : '';
+    add(`${label} at (${h.x},${h.y})`, (said ? `Examined before: "${clip(said)}".` : 'Not examined yet.') + pcObj + sw, { kind: 'hidden', x: h.x, y: h.y, face }, path);
   }
 
   // Silph Co. card-key doors: facing the door tile and pressing A opens it if the CARD KEY is in the bag
