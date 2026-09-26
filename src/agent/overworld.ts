@@ -595,7 +595,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   }
   if (boulders.length && slotWithMove(ctx, 'STRENGTH') >= 0 && gs.badges & 0x08) {
     // search over (boulder square, where the player can walk) for a push sequence that lands the boulder on a switch
-    const switchReachable = (b: { x: number; y: number }, bx0: number, by0: number, px0: number, py0: number, sws: { x: number; y: number }[]) => {
+    // fewest pushes to get this boulder onto a switch (Infinity = impossible, NaN = search too big to tell)
+    const switchPushes = (b: { x: number; y: number }, bx0: number, by0: number, px0: number, py0: number, sws: { x: number; y: number }[]): number => {
       const base = new Set([...blocked].filter((k) => k !== `${b.x},${b.y}` && !edgeMats.has(k)));
       const free = (x: number, y: number) => g.walkable(x, y) && !base.has(`${x},${y}`);
       const region = (bx: number, by: number, sx: number, sy: number) => {
@@ -611,20 +612,24 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
         return seen;
       };
       const visited = new Set<string>();
-      const queue: [number, number, number, number][] = [[bx0, by0, px0, py0]];
+      const queue: [number, number, number, number, number][] = [[bx0, by0, px0, py0, 0]];
       while (queue.length && visited.size < 4000) {
-        const [bx, by, sx, sy] = queue.shift()!;
-        if (sws.some((f) => f.x === bx && f.y === by)) return true;
+        const [bx, by, sx, sy, n] = queue.shift()!;
+        if (sws.some((f) => f.x === bx && f.y === by)) return n;
         const reach = region(bx, by, sx, sy);
         const sig = `${bx},${by}|${[...reach].sort()[0]}`;
         if (visited.has(sig)) continue;
         visited.add(sig);
         for (const [ex, ey] of Object.values(DIRS)) {
           if (!reach.has(`${bx - ex},${by - ey}`) || !free(bx + ex, by + ey) || !boulderCanGo(bx - ex, by - ey, bx + ex, by + ey)) continue;
-          queue.push([bx + ex, by + ey, bx, by]);
+          queue.push([bx + ex, by + ey, bx, by, n + 1]);
         }
       }
-      return visited.size >= 4000; // search too big: don't claim it's lost
+      return visited.size >= 4000 ? NaN : Infinity; // search too big: unknown
+    };
+    const switchReachable = (b: { x: number; y: number }, bx0: number, by0: number, px0: number, py0: number, sws: { x: number; y: number }[]) => {
+      const n = switchPushes(b, bx0, by0, px0, py0, sws);
+      return isNaN(n) || isFinite(n);
     };
     const swFree = (FLOOR_FEATURES[gs.mapName] ?? []).some((f) => f.kind === 'switch' && !boulders.some((o) => o.x === f.x && o.y === f.y));
     const gateNote = mem.gatedRoute && swFree ? ' The way to the objective is closed by a gate right now; a boulder resting on a floor switch opens it.' : '';
@@ -673,6 +678,11 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       }
       // can any sequence of pushes still bring this boulder onto a free floor switch after this push?
       const lost = freeSw.length > 0 && feature?.kind !== 'switch' && !switchReachable(b, tx, ty, b.x, b.y, freeSw);
+      // fewer pushes still needed after this push than now (walking distance can mislead: a wall may be behind it)
+      const closerByPushes = () => {
+        const after = switchPushes(b, tx, ty, b.x, b.y, freeSw), now = switchPushes(b, b.x, b.y, px, py, freeSw);
+        return isFinite(after) && isFinite(now) && after < now;
+      };
       const sw = freeSw.length && feature?.kind !== 'switch'
         ? `Floor switch${freeSw.length > 1 ? 'es' : ''} on this floor at ${freeSw.map((f) => `(${f.x},${f.y})`).join(', ')}; after this push the boulder is ${dTxt(near(tx, ty))} from the nearest over open floor (now ${dTxt(near(b.x, b.y))}).` : '';
       const facts = [
@@ -686,7 +696,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
         // like the building switches: the closed way and what opens it (a visible floor switch)
         mem.gatedRoute && freeSw.length ? 'The way to the objective is closed by a gate right now; a boulder resting on a floor switch opens it.' : '',
         // closer to the switch without stranding the boulder: toward the objective (same idea as "Pressing it leads toward the objective")
-        mem.gatedRoute && freeSw.length && !feature && pushable.length > 0 && !lost && near(tx, ty) < near(b.x, b.y) ? 'Leads toward the objective: brings the boulder closer to the floor switch.' : '',
+        mem.gatedRoute && freeSw.length && !feature && pushable.length > 0 && !lost && closerByPushes() ? 'Leads toward the objective: brings the boulder closer to the floor switch.' : '',
         feature?.kind === 'switch' && mem.gatedRoute ? 'Leads toward the objective: puts the boulder on the floor switch.' : '',
         'Boulders go back to their starting spots when you leave this area.',
       ].filter(Boolean).join(' ');
