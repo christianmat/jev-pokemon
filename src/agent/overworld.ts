@@ -828,6 +828,11 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const t = c.target as { x?: number; y?: number };
     if (t.x !== undefined) c.key = c.key.replace(/^Enter /, `Take the exit at (${t.x},${t.y}) to `);
   }
+  // gated, and nothing reachable leads toward the objective by the layout: then "away" (by layout) says nothing
+  // useful either (the layout's way runs through a closed part), so drop those claims
+  if (mem.gatedRoute && !out.some((c) => /Leads toward the objective/.test(c.desc))) {
+    for (const c of out) c.desc = c.desc.replace(/ ?Leads away from the objective \(\d+ areas away\) \(by the map layout; a gate on the way is closed right now\)\./, '');
+  }
   // mid-puzzle: while a push toward a switch is on offer, wandering off (explore / exits that lead away, which also
   // reset the boulders) isn't offered
   if (out.some((c) => c.target.kind === 'push' && /Leads toward the objective/.test(c.desc))) {
