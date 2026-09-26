@@ -676,7 +676,7 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   lastMapWasMart = false; // one-shot: only the first decision after leaving a Mart
   const done = (ctx.mem.intent?.value === 'heal' && healed) || leftMart || (ctx.mem.intent?.value === 'shop' && !!ctx.mem.shopDone) || (ctx.mem.intent?.value === 'team' && !!ctx.mem.pcDone);
   if (done && ctx.mem.intent?.value === 'team') ctx.mem.teamSig = teamSignature(ctx);
-  if (done && ctx.mem.intent?.value === 'shop') ctx.mem.shopMoney = gs.money;
+  if (done && ctx.mem.intent?.value === 'shop') { ctx.mem.shopMoney = gs.money; ctx.mem.shopAt = Date.now(); }
   if (done) { ctx.mem.shopDone = false; ctx.mem.pcDone = false; }
   if (!done && ctx.mem.intent?.key === key && (ctx.mem.intent.age = (ctx.mem.intent.age ?? 0) + 1) <= FOCUS_TTL) return ctx.mem.intent.value;
   const balls = gs.bag().filter((i) => /BALL$/.test(i.name)).reduce((a, i) => a + i.qty, 0);
@@ -688,7 +688,9 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   criteria.shop = `${INTENTS.shop} Money: ¥${gs.money}. Prices: Poké Ball ¥200, Potion ¥300 (heals 20 HP), Super Potion ¥700 (heals 50 HP), Antidote ¥100.${healNote}`;
   // impossible focuses aren't offered (same rule as unusable items)
   // shop is offered when there's money to spend: ¥100+, and ¥200+ more than when the last shop visit ended
-  if (gs.money < 100 || (ctx.mem.shopMoney !== undefined && gs.money < ctx.mem.shopMoney + 200)) delete (criteria as Record<string, string>).shop;
+  // after a Mart visit, shopping is offered again once ¥200 more was earned, or 15 minutes later (can't loop fast either way)
+  const shopCooldown = ctx.mem.shopMoney !== undefined && gs.money < ctx.mem.shopMoney + 200 && Date.now() - (ctx.mem.shopAt ?? 0) < 15 * 60_000;
+  if (gs.money < 100 || shopCooldown) delete (criteria as Record<string, string>).shop;
   if (balls === 0 && gs.money < 200) delete (criteria as Record<string, string>).catch;
   criteria.heal = `${INTENTS.heal} Healing at a Pokémon Center is free.${healNote}`;
   // loop rule: the same team lost everything at the same place 2+ times -> 'progress' comes back once the team changes

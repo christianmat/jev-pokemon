@@ -31,6 +31,8 @@ export interface Memory {
   shopMoney?: number;
   /** milestone whose prerequisite item was missing at the last check */
   needsMissing?: string;
+  /** when the last shop focus ended (ms since epoch) */
+  shopAt?: number;
   /** a field move no party Pokémon knows that the way to the objective needs (set by the overworld) */
   fieldMoveNeeded?: 'CUT' | 'SURF';
   /** whole-team losses by map: how many, and the team (species + levels) at the last one */
