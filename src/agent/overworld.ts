@@ -64,6 +64,17 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   const surf = gs.walkState === 2;
   const { m } = currentMilestone(gs);
   // a prerequisite item not in the bag yet: head to where it's found first
+  // people who never move stand in corridors like walls: split this map's regions around them
+  {
+    const stay = new Set<string>();
+    for (const sp of gs.sprites()) {
+      const o = md?.objects[sp.index - 1];
+      if (!sp.hidden && o && o.movement === 0xff && o.item == null) stay.add(`${sp.x},${sp.y}`);
+    }
+    // live walkability too (doors opened/closed by events differ from the map's static data)
+    let wk = ''; for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) wk += g.walkable(x, y) ? '1' : '0';
+    rg.refine(gs.mapId, stay, (x, y) => g.walkable(x, y), wk);
+  }
   const need = missingNeed(m, gs);
   // a prerequisite just arrived: what blocked us before (e.g. guards wanting it) may be open now
   if (mem.needsMissing && mem.needsMissing !== need?.what) {

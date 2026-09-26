@@ -62,19 +62,42 @@ export class RegionGraph {
 
   grid(map: number) { return this.grids.get(map); }
 
+  /** Squares on a map that are occupied right now (people who never move): kept out of that map's regions. */
+  private extraBlocked = new Map<number, Set<string>>();
+  private liveWalk = new Map<number, (x: number, y: number) => boolean>();
+  private extraKey = '';
+  /** Re-split one map's regions around occupied squares (only when they changed), then relink everything. */
+  refine(map: number, blocked: Set<string>, walk?: (x: number, y: number) => boolean, walkKey = '') {
+    const key = `${map}|${[...blocked].sort().join(';')}|${walkKey}`;
+    if (key === this.extraKey) return;
+    this.extraKey = key;
+    this.extraBlocked.clear(); this.liveWalk.clear();
+    if (blocked.size) this.extraBlocked.set(map, blocked);
+    if (walk) this.liveWalk.set(map, walk);
+    this.out.clear();
+    for (const md of this.rom.maps.values()) this.label(md);
+    for (const md of this.rom.maps.values()) this.link(md);
+  }
+
   private add(a: string, b: string) { if (a === b) return; (this.out.get(a) ?? this.out.set(a, new Set()).get(a)!).add(b); }
 
   /** Flood-fill undirected-ish components: ledge jumps add directed edges between components. */
   private label(md: MapData) {
     let g: StaticGrid;
-    try { g = staticGrid(this.rom, md, this.caps); } catch { return; }
-    this.grids.set(md.id, g);
+    const cached = this.grids.get(md.id);
+    if (cached) g = cached;
+    else { try { g = staticGrid(this.rom, md, this.caps); } catch { return; } this.grids.set(md.id, g); }
+    const extra = this.extraBlocked.get(md.id);
+    const live = this.liveWalk.get(md.id);
+    const walkable = (x: number, y: number) => (live ? live(x, y) : g.walk(x, y));
     const ids = new Int32Array(g.w * g.h).fill(-1);
     let next = 0;
     const warpSq = new Set(md.warps.map((w) => `${w.x},${w.y}`));
     const spinners = this.rom.spinners.get(md.id);
     // arrow tiles are one-way conveyors: keep them out of the flood fill, link them as directed edges below
-    const ok = (x: number, y: number) => x >= 0 && y >= 0 && x < g.w && y < g.h && !spinners?.has(`${x},${y}`) && (g.walk(x, y) || warpSq.has(`${x},${y}`));
+    // warp squares (doors, teleport pads) are endpoints, not floor: stepping on one takes you away, so they never
+    // connect two areas. Flood the floor first, then attach each warp square to an adjacent area.
+    const ok = (x: number, y: number) => x >= 0 && y >= 0 && x < g.w && y < g.h && !spinners?.has(`${x},${y}`) && !extra?.has(`${x},${y}`) && !warpSq.has(`${x},${y}`) && walkable(x, y);
     for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) {
       if (ids[y * g.w + x] !== -1 || !ok(x, y)) continue;
       const q = [[x, y]]; ids[y * g.w + x] = next;
@@ -91,7 +114,21 @@ export class RegionGraph {
       }
       next++;
     }
+    // each warp square is its own small area: arriving on it you can step off to any side
+    const warpSides: [number, number[]][] = [];
+    for (const w of md.warps) {
+      if (w.x < 0 || w.y < 0 || w.x >= g.w || w.y >= g.h || ids[w.y * g.w + w.x] >= 0) continue;
+      const sides = new Set<number>();
+      for (const [dx, dy] of Object.values(D)) {
+        const nx = w.x + dx, ny = w.y + dy;
+        if (nx >= 0 && ny >= 0 && nx < g.w && ny < g.h && ids[ny * g.w + nx] >= 0 && !warpSq.has(`${nx},${ny}`)) sides.add(ids[ny * g.w + nx]);
+      }
+      ids[w.y * g.w + w.x] = next;
+      warpSides.push([next, [...sides]]);
+      next++;
+    }
     this.comp.set(md.id, { w: g.w, h: g.h, ids });
+    for (const [wid, sides] of warpSides) for (const sd of sides) this.add(`${md.id}:${wid}`, `${md.id}:${sd}`);
     // spinners: from any region touching an arrow tile to the region where it lands (following chains)
     for (const [k, land0] of spinners ?? []) {
       const [sx, sy] = k.split(',').map(Number);
@@ -166,8 +203,16 @@ export class RegionGraph {
     const g = this.grids.get(md.id);
     if (!g) return;
     md.warps.forEach((w, i) => {
-      const a = this.regionAt(md.id, w.x, w.y);
-      if (a) for (const b of this.warpTargets(md, i)) this.add(a, b);
+      // stepping onto a warp from any side takes you straight to its destination
+      const froms = new Set<string>();
+      const own = this.regionAt(md.id, w.x, w.y);
+      if (own) froms.add(own);
+      for (const [dx, dy] of Object.values(D)) {
+        const c = this.comp.get(md.id);
+        const nx = w.x + dx, ny = w.y + dy;
+        if (c && nx >= 0 && ny >= 0 && nx < c.w && ny < c.h && c.ids[ny * c.w + nx] >= 0) froms.add(`${md.id}:${c.ids[ny * c.w + nx]}`);
+      }
+      for (const b of this.warpTargets(md, i)) for (const a of froms) this.add(a, b);
     });
     for (const c of md.connections) {
       const edge: [number, number][] = [];
