@@ -870,7 +870,10 @@ async function runChosen(ctx: Ctx, c: Candidate, agent: Agent, battleInterrupt: 
   if (c.target.kind === 'item') pendingItem = { name: (c.target as { name: string }).name, sig: itemSig(ctx) };
   const res = await execute(ctx, c, agent);
   const bE = (ctx.mem.blockedEdges ??= {});
-  if (ctx.gs.mapId !== mapBefore) for (const e of edges) delete bE[e]; // it worked this time
+  // a warp to the same map (teleport pads) doesn't change the map: it worked if we're now off in another area
+  const sameMapWarp = tg.kind === 'warp' && (c.target as { dest: number }).dest === mapBefore;
+  const arrived = () => ctx.gs.mapId !== mapBefore || (sameMapWarp && regionGraph(ctx).regionAt(mapBefore, ctx.gs.x, ctx.gs.y) !== fromRegion && Math.abs(ctx.gs.x - tg.x!) + Math.abs(ctx.gs.y - tg.y!) > 1);
+  if (arrived()) for (const e of edges) delete bE[e]; // it worked this time
   const isExit = (c.target.kind === 'exit' || c.target.kind === 'warp') && c.path.length > 0;
   if (isExit || res === 'interrupted') {
     // settle any dialog/cutscene the attempt caused (keeping what was said), then check whether we got there
@@ -885,14 +888,14 @@ async function runChosen(ctx: Ctx, c: Candidate, agent: Agent, battleInterrupt: 
     for (let i = 0; i < 400 && !ctx.gs.inBattle && (ctx.gs.screen().hasTextBox || (ctx.gs.joyIgnore & 0xf0) || (ctx.gs.u8('wStatusFlags5') & 0x80)); i++) settleTap();
     // a trainer's battle can start a moment after its text closes
     const battleComing = () => ctx.gs.inBattle || ctx.gs.u8('wCurOpponent') !== 0; // set when a trainer engages
-    for (let i = 0; i < 300 && ctx.gs.mapId === mapBefore && !battleComing(); i++) settleTap();
+    for (let i = 0; i < 300 && !arrived() && !battleComing(); i++) settleTap();
     for (let i = 0; i < 400 && !battleComing() && (ctx.gs.screen().hasTextBox || (ctx.gs.joyIgnore & 0xf0) || (ctx.gs.u8('wStatusFlags5') & 0x80)); i++) settleTap();
     if (battleComing()) { battleInterrupt(); return; }
     // stopped = a speech sent us back, or the walk finished and we're still here; a silent interruption
     // (ledge hop, cutscene) is not a failure: the walk gets resumed
     // a speech only means "stopped" if we didn't get any closer (a guard sends you back; a healing zone doesn't)
     const advanced = distTo() <= distStart - 2;
-    if (ctx.gs.mapId === mapBefore && ((said.length && !advanced) || (isExit && res !== 'interrupted' && !said.length))) {
+    if (!arrived() && ((said.length && !advanced) || (isExit && res !== 'interrupted' && !said.length))) {
       const k = `${mapNameBefore}:${c.key}`;
       ctx.mem.blockedExits[k] = (ctx.mem.blockedExits[k] ?? 0) + 1;
       if (said.length) ctx.mem.npcText[`${k}:blocked`] = said.join(' ').slice(-1500);
