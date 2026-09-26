@@ -95,7 +95,9 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     // live walkability too (doors opened/closed by events differ from the map's static data)
     // a locked Silph Co. door counts as passable for routing once the CARD KEY is in the bag (it opens with A)
     const keyDoor = hasCardKey(gs) ? (x: number, y: number) => cardKeyDoor(gs, g, x, y) : () => false;
-    const walk = (x: number, y: number) => g.walkable(x, y) || keyDoor(x, y);
+    // same rules as the static graph: trees count as passable with CUT, water with SURF
+    const fm = capabilities(ctx);
+    const walk = (x: number, y: number) => g.walkable(x, y) || keyDoor(x, y) || (fm.cut && g.cuttable(x, y)) || (fm.surf && g.water(x, y));
     let wk = ''; for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) wk += walk(x, y) ? '1' : '0';
     rg.refine(gs.mapId, stay, walk, wk);
   }
