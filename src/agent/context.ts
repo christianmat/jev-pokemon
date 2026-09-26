@@ -29,6 +29,8 @@ export interface Memory {
   teamSig?: string;
   /** money when the last shop visit ended: 'shop' is offered again once there's ¥200+ more */
   shopMoney?: number;
+  /** milestone whose prerequisite item was missing at the last check */
+  needsMissing?: string;
   /** whole-team losses by map: how many, and the team (species + levels) at the last one */
   losses?: Record<string, { count: number; team: string; moves?: string }>;
   /** last BILL's PC mode chosen (WITHDRAW/DEPOSIT/RELEASE), for list facts */

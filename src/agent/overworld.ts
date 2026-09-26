@@ -65,6 +65,13 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   const { m } = currentMilestone(gs);
   // a prerequisite item not in the bag yet: head to where it's found first
   const needsItem = m?.needs && !gs.bag().some((i) => m.needs!.item.test(i.name));
+  // the prerequisite just arrived: what blocked us before (e.g. guards wanting it) may be open now
+  if (m?.needs && !needsItem && mem.needsMissing === m.id) {
+    mem.blockedEdges = {}; mem.blockedExits = {};
+    for (const k of Object.keys(mem.npcText)) if (k.endsWith(':blocked')) delete mem.npcText[k];
+    ctx.log('info', `got ${m.needs.what}: cleared earlier "did not get through" records`);
+  }
+  mem.needsMissing = needsItem ? m!.id : undefined;
   const objMaps = (needsItem ? m!.needs!.maps : m?.maps ?? []).map((n) => Object.entries((gen as any).maps).find(([, v]: any) => v.name === n)?.[0]).filter(Boolean).map(Number);
   // exits that stopped us at least twice are left out of route distances until one works again
   const skip = new Set(Object.entries(mem.blockedEdges ?? {}).filter(([, n]) => n >= 2).map(([e]) => e));
