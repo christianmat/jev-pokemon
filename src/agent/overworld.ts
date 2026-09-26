@@ -136,10 +136,12 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   // a new badge / objective / item can open what stopped us before: forget the "did not get through" counts then
   const blockSig = `${gs.badges}|${currentMilestone(gs).index}|${gs.bag().map((i) => i.name).sort().join(',')}`;
   if (mem.blockSig !== undefined && mem.blockSig !== blockSig) mem.blockedExits = {};
-  // push-back squares: forget them on a new badge / objective / a newly obtained item (a key), not when items get used up
+  // push-back squares: forget them on a new badge / objective
   const trapSig = `${gs.badges}|${currentMilestone(gs).index}`;
   const newItem = gs.bag().some((i) => !(mem.trapBag ?? []).includes(i.name));
-  if ((mem.trapSig !== undefined && mem.trapSig !== trapSig) || (mem.trapBag && newItem)) mem.trapSquares = {};
+  // (keys that open such doors complete an objective, so a new objective covers them; ordinary pickups don't reset)
+  if (mem.trapSig !== undefined && mem.trapSig !== trapSig) mem.trapSquares = {};
+  void newItem;
   mem.trapSig = trapSig;
   mem.trapBag = [...new Set([...(mem.trapBag ?? []), ...gs.bag().map((i) => i.name)])];
   mem.blockSig = blockSig;
