@@ -676,7 +676,7 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
       ctx.log('info', `resuming "${again.key}" after an interruption (${pendingTarget.resumes}/3)`);
       resumingCount = pendingTarget.resumes;
       pendingTarget = null;
-      await execute(ctx, again, agent);
+      await runChosen(ctx, again, agent, () => {});
       resumingCount = 0;
       return;
     }
@@ -740,6 +740,11 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
   agent.noteDecision(`${ctx.gs.mapName}: ${c.key}`);
   ctx.log('decision', `${ctx.gs.mapName}: ${c.key}`, { options: cands.length });
   ctx.mem.lastInteraction = null;
+  await runChosen(ctx, c, agent, () => { tried[tk(c)] = Math.max(0, (tried[tk(c)] ?? 1) - 1); });
+}
+
+/** Execute a chosen (or resumed) target and record whether an exit attempt got through (and what stopped it). */
+async function runChosen(ctx: Ctx, c: Candidate, agent: Agent, battleInterrupt: () => void) {
   const mapBefore = ctx.gs.mapId, mapNameBefore = ctx.gs.mapName;
   const fromRegion = regionGraph(ctx).regionAt(mapBefore, ctx.gs.x, ctx.gs.y);
   const goal = c.path[c.path.length - 1];
@@ -751,8 +756,6 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
   const res = await execute(ctx, c, agent);
   const bE = (ctx.mem.blockedEdges ??= {});
   if (ctx.gs.mapId !== mapBefore) for (const e of edges) delete bE[e]; // it worked this time
-  // a trainer battle cut the walk short: not a failed attempt, it gets resumed
-  const battleInterrupt = () => { tried[tk(c)] = Math.max(0, (tried[tk(c)] ?? 1) - 1); };
   const isExit = (c.target.kind === 'exit' || c.target.kind === 'warp') && c.path.length > 0;
   if (isExit || res === 'interrupted') {
     // settle any dialog/cutscene the attempt caused (keeping what was said), then check whether we got there
@@ -768,6 +771,7 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
     // a trainer's battle can start a moment after its text closes
     const battleComing = () => ctx.gs.inBattle || ctx.gs.u8('wCurOpponent') !== 0; // set when a trainer engages
     for (let i = 0; i < 300 && ctx.gs.mapId === mapBefore && !battleComing(); i++) settleTap();
+    for (let i = 0; i < 400 && !battleComing() && (ctx.gs.screen().hasTextBox || (ctx.gs.joyIgnore & 0xf0) || (ctx.gs.u8('wStatusFlags5') & 0x80)); i++) settleTap();
     if (battleComing()) { battleInterrupt(); return; }
     // stopped = a speech sent us back, or the walk finished and we're still here; a silent interruption
     // (ledge hop, cutscene) is not a failure: the walk gets resumed
