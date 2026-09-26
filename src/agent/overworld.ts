@@ -124,7 +124,9 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     seenWalk.set(gs.mapId, { walk: (x: number, y: number) => x >= 0 && y >= 0 && x < w && bits[y * w + x] === '1', key: String(hashStr(wk)) });
     // switch-gated buildings (Pokémon Mansion): model every floor's gates from the game's switch flag
     if (SWITCH_GATES.some((x) => x.map === gs.mapName)) rg.setSwitch(gs.event(SWITCH_EVENT));
-    rg.refine(gs.mapId, stay, walk, wk, seenWalk);
+    // switch-gated floors are modelled exactly from the switch flag: never use (possibly stale) snapshots for them
+    const others = new Map([...seenWalk].filter(([id]) => !SWITCH_GATES.some((x) => x.map === mapName(id))));
+    rg.refine(gs.mapId, stay, walk, wk, others);
   }
   const need = missingNeed(m, gs);
   // a prerequisite just arrived: what blocked us before (e.g. guards wanting it) may be open now
