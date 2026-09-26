@@ -49,6 +49,14 @@ export function staticGrid(rom: Rom, md: MapData, caps: Caps = { cut: false, sur
   };
 }
 
+/** Holes in the floor (map scripts, not warp data): stepping on one drops you to another floor. From pret/pokered's
+ *  scripts (hole coords) + DungeonWarpData (landing squares). */
+export const HOLES: { from: string; x: number; y: number; to: string; tx: number; ty: number }[] = [
+  { from: 'POKEMON_MANSION_3F', x: 16, y: 14, to: 'POKEMON_MANSION_1F', tx: 16, ty: 14 },
+  { from: 'POKEMON_MANSION_3F', x: 17, y: 14, to: 'POKEMON_MANSION_1F', tx: 16, ty: 14 },
+  { from: 'POKEMON_MANSION_3F', x: 19, y: 14, to: 'POKEMON_MANSION_2F', tx: 18, ty: 14 },
+];
+
 export class RegionGraph {
   /** region id per map square: key `${map}` -> Int32Array (w*h), -1 = not walkable */
   private comp = new Map<number, { w: number; h: number; ids: Int32Array }>();
@@ -97,7 +105,7 @@ export class RegionGraph {
     const walkable = (x: number, y: number) => (live ? live(x, y) : g.walk(x, y));
     const ids = new Int32Array(g.w * g.h).fill(-1);
     let next = 0;
-    const warpSq = new Set(md.warps.map((w) => `${w.x},${w.y}`));
+    const warpSq = new Set([...md.warps.map((w) => `${w.x},${w.y}`), ...HOLES.filter((h) => h.from === md.name).map((h) => `${h.x},${h.y}`)]);
     const spinners = this.rom.spinners.get(md.id);
     // arrow tiles are one-way conveyors: keep them out of the flood fill, link them as directed edges below
     // warp squares (doors, teleport pads) are endpoints, not floor: stepping on one takes you away, so they never
@@ -121,7 +129,7 @@ export class RegionGraph {
     }
     // each warp square is its own small area: arriving on it you can step off to any side
     const warpSides: [number, number[]][] = [];
-    for (const w of md.warps) {
+    for (const w of [...md.warps, ...HOLES.filter((h) => h.from === md.name)]) {
       if (w.x < 0 || w.y < 0 || w.x >= g.w || w.y >= g.h || ids[w.y * g.w + w.x] >= 0) continue;
       const sides = new Set<number>();
       for (const [dx, dy] of Object.values(D)) {
@@ -222,6 +230,13 @@ export class RegionGraph {
       }
       for (const b of this.warpTargets(md, i)) for (const a of froms) this.add(a, b);
     });
+    // holes: from the hole square (and the floor next to it) to where you land
+    for (const h of HOLES.filter((hh) => hh.from === md.name)) {
+      const to = [...this.rom.maps.values()].find((m) => m.name === h.to);
+      const b = to ? this.regionAt(to.id, h.tx, h.ty) : null;
+      const own = this.regionAt(md.id, h.x, h.y);
+      if (b && own) this.add(own, b);
+    }
     for (const c of md.connections) {
       const edge: [number, number][] = [];
       if (c.dir === 'north') for (let x = 0; x < g.w; x++) edge.push([x, 0]);

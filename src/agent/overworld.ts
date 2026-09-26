@@ -8,7 +8,7 @@ import { currentMilestone, missingNeed } from '../knowledge/milestones.js';
 import { useFieldMove, useItem, slotWithMove, closeMenus } from './field.js';
 import { resetMenuRepeats } from './menus.js';
 import { capabilities, fieldMoveLearners } from './context.js';
-import { RegionGraph } from '../game/regions.js';
+import { RegionGraph, HOLES } from '../game/regions.js';
 /** region graphs for capabilities the party doesn't have yet (to tell whether CUT/SURF is what's missing) */
 const hypoGraphs = new Map<string, RegionGraph>();
 
@@ -82,7 +82,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   const md = rom.maps.get(gs.mapId);
   const px = gs.x, py = gs.y;
   // NPCs block, and so do warp tiles (doors/ladders): stepping on one mid-path would warp us away by accident
-  const warpSquares = new Set((md?.warps ?? []).map((w) => `${w.x},${w.y}`));
+  const warpSquares = new Set([...(md?.warps ?? []).map((w) => `${w.x},${w.y}`), ...HOLES.filter((h) => h.from === gs.mapName).map((h) => `${h.x},${h.y}`)]);
   const blocked = new Set([...blockedSquares(ctx), ...warpSquares]);
   const surf = gs.walkState === 2;
   const { m } = currentMilestone(gs);
@@ -209,6 +209,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     if (!isFinite(h)) return isFinite(hereHops) ? 'Does not lead toward the objective (dead end for now).' : '';
     const gate = mem.gatedRoute ? ' (by the map layout; a gate on the way is closed right now)' : '';
     if (h < hereHops) return `Leads toward the objective (${h} area(s) away from it)${gate}.`;
+    if (mem.gatedRoute) return ''; // by layout only (gates move): no 'away'/'same' claims
     if (h > hereHops) return `Leads away from the objective (${h} areas away).`;
     return `Same distance from the objective (${h} areas).`;
   };
@@ -303,6 +304,17 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     add(`Enter ${name}`, `Door/stairs/ladder at (${w.x},${w.y}) leading to ${name}.${heal} ${routeFacts(dest, destRegions)}${svc(destRegions)} ${visitFacts(dest)}`, { kind: 'warp', x: w.x, y: w.y, dest }, path);
     seenWarp.push({ dest, land, c: out[out.length - 1] });
   });
+
+  // Holes in the floor: stepping on one drops you to another floor
+  for (const h of HOLES.filter((hh) => hh.from === gs.mapName)) {
+    const to = [...rom.maps.values()].find((mm) => mm.name === h.to);
+    if (!to) continue;
+    const tr = rg.regionAt(to.id, h.tx, h.ty);
+    const blockedExceptThis = new Set(blocked); blockedExceptThis.delete(`${h.x},${h.y}`);
+    const path = px === h.x && py === h.y ? [] : findPath(g, px, py, (x, y) => x === h.x && y === h.y, { blocked: blockedExceptThis, surf });
+    destRegionsByKey.set(`w:${h.x},${h.y}`, tr ? [tr] : []);
+    add(`Drop through the hole at (${h.x},${h.y})`, `A hole in the floor: stepping on it drops you down to ${h.to}. ${routeFacts(to.id, tr ? [tr] : [])} ${visitFacts(to.id)}`, { kind: 'warp', x: h.x, y: h.y, dest: to.id }, path);
+  }
 
   // Map-edge connections
   for (const c of md?.connections ?? []) {
