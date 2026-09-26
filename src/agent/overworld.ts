@@ -260,7 +260,11 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   const serviceDist = (re: RegExp) => {
     const ids = Object.entries((gen as any).maps).filter(([, v]: any) => re.test(v.name)).map(([id]) => +id);
     // in a switch-gated building, the way out may need a switch press too
-    if (switchAfter) return switchDistances(rom, rg, switchAfter.alt, ids.flatMap((id) => rg.regionsOf(id)), ids.flatMap((id) => switchAfter!.alt.regionsOf(id)), skip).da;
+    if (switchAfter) {
+      const r = switchDistances(rom, rg, switchAfter.alt, ids.flatMap((id) => rg.regionsOf(id)), ids.flatMap((id) => switchAfter!.alt.regionsOf(id)), skip);
+      switchSvc[re.source] = r;
+      return r.da;
+    }
     return rg.distancesTo(ids.flatMap((id) => rg.regionsOf(id)), skip);
   };
   const pcDist = serviceDist(/POKECENTER/), martDist = serviceDist(/_MART$/);
@@ -443,9 +447,16 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     if (label === 'Press the switch' && switchAfter) {
       const r = switchAfter.alt.regionAt(gs.mapId, h.x, h.y + 1);
       const after = r ? switchAfter.db.get(r) : undefined;
-      flipFact = after === undefined ? ' After pressing it (all gates flip), the objective would not be reachable from here.'
+      // and toward the nearest Pokémon Center / Mart after the flip?
+      const svcAfter = (src: string, label: string) => {
+        const sv = switchSvc[src]; if (!sv || !r) return '';
+        const now = hereRegion ? sv.da.get(hereRegion) : undefined, then = sv.db.get(r);
+        return then !== undefined && (now === undefined || then < now) ? ` After pressing it: toward the nearest ${label} (${then} areas).` : '';
+      };
+      const svcNote = svcAfter('POKECENTER', 'Pokémon Center') + svcAfter('_MART$', 'Poké Mart');
+      flipFact = svcNote + (after === undefined ? ' After pressing it (all gates flip), the objective would not be reachable from here.'
         : after < hereHops ? ` Pressing it leads toward the objective: all gates flip, and the objective is then ${after} area(s) away (now ${isFinite(hereHops) ? hereHops : 'not reachable'}).`
-        : ` Pressing it flips all gates; the objective is then ${after} area(s) away (now ${isFinite(hereHops) ? hereHops : 'not reachable'}).`;
+        : ` Pressing it flips all gates; the objective is then ${after} area(s) away (now ${isFinite(hereHops) ? hereHops : 'not reachable'}).`);
     }
     const sw = label === 'Press the switch' ? ` Switches in this building open some gates and close others.${!mem.gatedRoute ? '' : noEff ? ` The way to the objective is closed by a gate right now, and it was still closed after pressing a switch here ${noEff} time(s) (each press flips the same gates back and forth).` : ' The way to the objective is closed by a gate right now; this switch changes which gates are closed.'}` : '';
     add(`${label} at (${h.x},${h.y})`, (said ? `Examined before: "${clip(said)}".` : 'Not examined yet.') + pcObj + (flipFact || sw), { kind: 'hidden', x: h.x, y: h.y, face }, path);
@@ -922,6 +933,8 @@ function hopsIn(dist: Map<string, number>, regions: string[]) {
 let lastObjectiveReachable = true; // updated by every candidate build
 /** after pressing a switch here: the flipped graph and its distances (switch-gated buildings only) */
 let switchAfter: { alt: RegionGraph; db: Map<string, number> } | null = null;
+/** service (Pokémon Center / Mart) distances across switch positions, by service regex source */
+const switchSvc: Record<string, { da: Map<string, number>; db: Map<string, number> }> = {};
 let lastServiceDist: { pc: Map<string, number>; mart: Map<string, number> } | null = null;
 /** " Toward the nearest Pokémon Center (N areas)." etc. for a map entered from `via`, when closer than `from` */
 export function serviceFactsFromMap(mapId: number, via: number): string {
