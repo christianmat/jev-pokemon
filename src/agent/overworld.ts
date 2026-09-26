@@ -601,9 +601,11 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     add(`Use ${it.name} from the bag`, `${desc}${unused ? ` Opened ${unused} time(s) before and closed without using it.` : ''}`, { kind: 'item', name: it.name }, []);
   }
   // a full bag: items on the ground can't be picked up; any non-key item can be thrown away to free a slot
+  if (gs.bag().length < 20 && mem.itemUnused?.['BAG (toss)']) delete mem.itemUnused['BAG (toss)'];
   if (gs.bag().length >= 20) {
     const tossable = gs.bag().filter((it) => !rom.isKeyItem(it.id)).map((it) => it.name);
-    if (tossable.length) add('Open the bag to toss an item', `The bag is full (20 of 20 item slots), so items on the ground can't be picked up. In the bag, an item's menu offers TOSS (throws it away for good and frees a slot). Items that can be tossed: ${tossable.join(', ')}.`, { kind: 'toss', name: '' }, []);
+    const bagUnused = mem.itemUnused?.['BAG (toss)'] ?? 0;
+    if (tossable.length && bagUnused < 3) add('Open the bag to toss an item', `The bag is full (20 of 20 item slots), so items on the ground can't be picked up. In the bag, an item's menu offers TOSS (throws it away for good and frees a slot). Items that can be tossed: ${tossable.join(', ')}.${bagUnused ? ` Opened ${bagUnused} time(s) before and closed without tossing.` : ''}`, { kind: 'toss', name: '' }, []);
   }
 
   // Tall grass (wild encounters: train / catch)
@@ -1085,6 +1087,7 @@ async function runChosen(ctx: Ctx, c: Candidate, agent: Agent, battleInterrupt: 
   const tg = c.target as { kind: string; x?: number; y?: number; dir?: string };
   const edges = (destRegionsByKey.get(tg.kind === 'warp' ? `w:${tg.x},${tg.y}` : `e:${tg.dir}`) ?? []).map((r) => `${fromRegion}>${r}`);
   if (c.target.kind === 'item') pendingItem = { name: (c.target as { name: string }).name, sig: itemSig(ctx) };
+  if (c.target.kind === 'toss') pendingItem = { name: 'BAG (toss)', sig: itemSig(ctx) };
   const res = await execute(ctx, c, agent);
   const bE = (ctx.mem.blockedEdges ??= {});
   // a warp to the same map (teleport pads) doesn't change the map: it worked if we're now off in another area
