@@ -235,6 +235,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   if (!mem.gatedRoute && mem.switchNoEffect?.[gs.mapName]) mem.switchNoEffect[gs.mapName] = 0;
   lastObjectiveDist = { dist, rg, objMaps: objMapsNow, atRegion };
   lastObjectiveReachable = isFinite(hereHops);
+  lastHereHops = hereHops;
   // Getting closer to the objective counts as progress (mazes need back-and-forth without new maps)
   const mi = currentMilestone(gs).index;
   if (isFinite(hereHops) && hereHops < (mem.bestHops[mi] ?? Infinity)) mem.bestHops[mi] = hereHops;
@@ -862,6 +863,7 @@ async function decideIntent(ctx: Ctx): Promise<string> {
     criteria.team = `${INTENTS.team}${weakNote ? ` ${weakNote}` : ''} In the box: ${box.map((m) => `${m.nickname} (${m.species} Lv${m.level}, ${m.types.join('/')})`).join(', ')}. Team: ${party.map((p) => `${p.nickname} (${p.species} Lv${p.level}, ${p.types.join('/')})`).join(', ')}. Team levels range ${Math.min(...lvls)}-${Math.max(...lvls)}.`;
   } else delete (criteria as Record<string, string>).team;
   criteria.train = `${INTENTS.train} Beating trainers also earns money.`;
+  if (criteria.progress && isFinite(lastHereHops)) criteria.progress = `${criteria.progress} From here the objective is ${lastHereHops} area(s) away.`;
   const { picked } = await ctx.jev.ask('intent', situation(ctx), {
     intent: { type: 'choice', instructions: 'You are playing Pokémon Red. Given the objective, the party\'s health and levels (vs the typical opponent level of the objective), money and items, what should the player focus on right now?', criteria },
   });
@@ -933,6 +935,7 @@ function hopsIn(dist: Map<string, number>, regions: string[]) {
   return isFinite(h) ? h : undefined;
 }
 let lastObjectiveReachable = true; // updated by every candidate build
+let lastHereHops = Infinity;
 /** after pressing a switch here: the flipped graph and its distances (switch-gated buildings only) */
 let switchAfter: { alt: RegionGraph; db: Map<string, number> } | null = null;
 /** service (Pokémon Center / Mart) distances across switch positions, by service regex source */
