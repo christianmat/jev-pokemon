@@ -815,6 +815,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const t = c.target as { x?: number; y?: number };
     if (t.x !== undefined) c.key = c.key.replace(/^Enter /, `Take the exit at (${t.x},${t.y}) to `);
   }
+  // can a Pokémon Center be reached from here at all? (a heal focus with no way to one isn't offered)
+  healReachable = { map: gs.mapId, ok: /POKECENTER/.test(gs.mapName) || out.some((c) => /Pokémon Center/.test(c.desc) || c.key.includes('NURSE')) };
   return out;
 }
 
@@ -1028,7 +1030,8 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   // 'shop' is done once we've left a Mart (bought or not), so it can't send us straight back in
   const leftMart = ctx.mem.intent?.value === 'shop' && !/MART/.test(gs.mapName) && lastMapWasMart;
   lastMapWasMart = false; // one-shot: only the first decision after leaving a Mart
-  const done = (ctx.mem.intent?.value === 'progress' && !!ctx.mem.fieldMoveNeeded && !lastObjectiveReachable) || (ctx.mem.intent?.value === 'heal' && healed) || leftMart || (ctx.mem.intent?.value === 'shop' && !!ctx.mem.shopDone) || (ctx.mem.intent?.value === 'team' && !!ctx.mem.pcDone);
+  const noHealHere = healReachable?.map === gs.mapId && !healReachable.ok;
+  const done = (ctx.mem.intent?.value === 'progress' && !!ctx.mem.fieldMoveNeeded && !lastObjectiveReachable) || (ctx.mem.intent?.value === 'heal' && (healed || noHealHere)) || leftMart || (ctx.mem.intent?.value === 'shop' && !!ctx.mem.shopDone) || (ctx.mem.intent?.value === 'team' && !!ctx.mem.pcDone);
   if (done && ctx.mem.intent?.value === 'team') { ctx.mem.teamSig = teamSignature(ctx); ctx.mem.teamAt = Date.now(); }
   if (done && ctx.mem.intent?.value === 'shop') { ctx.mem.shopMoney = gs.money; ctx.mem.shopAt = Date.now(); }
   if (done) { ctx.mem.shopDone = false; ctx.mem.pcDone = false; }
@@ -1047,6 +1050,8 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   if (gs.money < 100 || shopCooldown) delete (criteria as Record<string, string>).shop;
   if (balls === 0 && gs.money < 200) delete (criteria as Record<string, string>).catch;
   criteria.heal = `${INTENTS.heal} Healing at a Pokémon Center is free.${healNote}`;
+  // no way to a Pokémon Center from here (e.g. a floor cut off until a puzzle is solved): not offered, like other impossible focuses
+  if (noHealHere) delete (criteria as Record<string, string>).heal;
   // loop rule: the same team lost everything at the same place 2+ times -> 'progress' comes back once the team changes
   // "changed" = a different lineup, or 5+ levels gained in total since that last loss
   const lineup = (t: string) => t.split(', ').map((x) => x.replace(/ Lv\d+$/, '')).sort().join(',');
@@ -1153,6 +1158,7 @@ let switchAfter: { alt: RegionGraph; db: Map<string, number> } | null = null;
 /** service (Pokémon Center / Mart) distances across switch positions, by service regex source */
 const switchSvc: Record<string, { da: Map<string, number>; db: Map<string, number> }> = {};
 let lastServiceDist: { pc: Map<string, number>; mart: Map<string, number> } | null = null;
+let healReachable: { map: number; ok: boolean } | null = null;
 /** " Toward the nearest Pokémon Center (N areas)." etc. for a map entered from `via`, when closer than `from` */
 export function serviceFactsFromMap(mapId: number, via: number): string {
   const o = lastObjectiveDist, sv = lastServiceDist;
