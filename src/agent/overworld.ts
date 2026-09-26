@@ -597,7 +597,13 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   // Explore unseen squares
   const seenSq = mem.stepsInMap[gs.mapName] ?? new Set();
   const ep = findPath(g, px, py, (x, y) => !seenSq.has(`${x},${y}`) && Math.abs(x - px) + Math.abs(y - py) >= 6, { blocked, maxNodes: 8000 });
-  if (ep) add('Explore this area', `Walk to a part of ${gs.mapName} not yet explored.`, { kind: 'explore' }, ep);
+  if (ep) {
+    // where the walk ends: same route facts as any other destination on this map
+    const end = ep[ep.length - 1];
+    const er = end ? rg.regionAt(gs.mapId, end.x, end.y) : null;
+    const eFact = er && er !== hereRegion ? ` ${routeFacts(gs.mapId, [er])}` : isFinite(hereHops) && hereHops > 0 ? ' Stays in the current area (does not bring the objective closer).' : '';
+    add('Explore this area', `Walk to a part of ${gs.mapName} not yet explored.${eFact}`, { kind: 'explore' }, ep);
+  }
 
   // Distinct options must have distinct names (e.g. several ladders to the same floor lead to different areas)
   const counts = new Map<string, number>();
