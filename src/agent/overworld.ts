@@ -692,6 +692,11 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       ].filter(Boolean).join(' ');
       add(`Push boulder at (${b.x},${b.y}) ${d}`, facts, { kind: 'push', x: b.x, y: b.y, dir: d }, path);
     }
+    // no boulder can reach a free switch from where it is now: say so on the exits (leaving resets them)
+    const freeAll = (FLOOR_FEATURES[gs.mapName] ?? []).filter((f) => f.kind === 'switch' && !boulders.some((o) => o.x === f.x && o.y === f.y));
+    if (movedBoulder && mem.gatedRoute && freeAll.length && !boulders.some((b) => switchReachable(b, b.x, b.y, px, py, freeAll))) {
+      for (const c of out) if (c.target.kind === 'warp' || c.target.kind === 'exit') c.desc = c.desc.replace(leaveNote, ` Right now no boulder on this floor can be brought onto a floor switch from where it is.${leaveNote}`);
+    }
   }
 
   // Bag items usable in the field (teach TM/HM, heal, evolve, flute, bike...)
