@@ -642,7 +642,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       const n = switchPushes(b, bx0, by0, px0, py0, sws);
       return isNaN(n) || isFinite(n);
     };
-    const freeSwitches = (FLOOR_FEATURES[gs.mapName] ?? []).filter((f) => f.kind === 'switch' && !boulders.some((o) => o.x === f.x && o.y === f.y));
+    const freeSwitches = openTargets(gs, boulders);
     const reachNow = new Map<number, boolean>();
     const canReachNow = (b: { index: number; x: number; y: number }) => {
       if (!reachNow.has(b.index)) reachNow.set(b.index, switchReachable(b, b.x, b.y, px, py, freeSwitches));
@@ -668,7 +668,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       return [...doorsReached(walkSet(moved))].some((k) => !doorsNow.has(k));
     };
     const swFree = freeSwitches.length > 0;
-    const gateNote = mem.gatedRoute && swFree ? ' The way to the objective is closed by a gate right now; a boulder resting on a floor switch opens it.' : '';
+    const gateNote = mem.gatedRoute && swFree ? ' The way to the objective is closed by a gate right now; a boulder on a floor switch (or dropped through a hole in the floor) opens it.' : '';
     if (!(gs.u8('wStatusFlags1') & 1)) add('Activate STRENGTH', `Lets the player push boulders on this map.${gateNote}`, { kind: 'strength' }, []);
     else for (const b of boulders) for (const d of Object.keys(DIRS) as Dir[]) {
       const [dx, dy] = DIRS[d];
@@ -688,7 +688,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
         return g.walkable(tx - ex, ty - ey) && boulderCanGo(tx - ex, ty - ey, tx + ex, ty + ey) && !others.has(k1) && !others.has(k2);
       });
       // the floor switches are visible on screen: how far this boulder would be from the nearest free one
-      const freeSw = (FLOOR_FEATURES[gs.mapName] ?? []).filter((f) => f.kind === 'switch' && !boulders.some((o) => o.x === f.x && o.y === f.y));
+      const freeSw = openTargets(gs, boulders);
       // distance over open floor (walls count; other boulders block), not a straight line
       const near = (x0: number, y0: number) => {
         const seen = new Set([`${x0},${y0}`]); let front = [[x0, y0]], d = 0;
@@ -713,23 +713,24 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
         if (prevD !== undefined) mem.boulderGains = (mem.boulderGains ?? 0) + 1; // the first reading on a visit isn't progress
       }
       // can any sequence of pushes still bring this boulder onto a free floor switch after this push?
-      const lost = freeSw.length > 0 && feature?.kind !== 'switch' && !switchReachable(b, tx, ty, b.x, b.y, freeSw);
+      const onTarget = !!feature && freeSw.includes(feature);
+      const lost = freeSw.length > 0 && !onTarget && !switchReachable(b, tx, ty, b.x, b.y, freeSw);
       // fewer pushes still needed after this push than now (walking distance can mislead: a wall may be behind it)
       const closerByPushes = () => {
         const after = switchPushes(b, tx, ty, b.x, b.y, freeSw), now = switchPushes(b, b.x, b.y, px, py, freeSw);
         return isFinite(after) && isFinite(now) && after < now;
       };
-      const sw = freeSw.length && feature?.kind !== 'switch'
-        ? `Floor switch at ${freeSw.map((f) => `(${f.x},${f.y})`).join(', ')}: the boulder would be ${dTxt(near(tx, ty))} from it over open floor (now ${dTxt(near(b.x, b.y))}).` : '';
+      const sw = freeSw.length && !onTarget
+        ? `${freeSw.map((f) => `${f.kind === 'switch' ? 'Floor switch' : 'Hole in the floor'} at (${f.x},${f.y})`).join(', ')}: the boulder would be ${dTxt(near(tx, ty))} from the nearest over open floor (now ${dTxt(near(b.x, b.y))}).` : '';
       // what sets the pushes apart comes first; the gate note is on "Activate STRENGTH" and the reset note on the exits
       const facts = [
         `Moves the boulder one square ${d} to (${tx},${ty}).`,
         feature ? `That square is a ${feature.kind === 'switch' ? 'floor switch' : 'hole in the floor'}.` : '',
         // closer to the switch without stranding the boulder: toward the objective (same idea as "Pressing it leads toward the objective")
-        mem.gatedRoute && freeSw.length && !feature && pushable.length > 0 && !lost && closerByPushes() ? 'Leads toward the objective: brings the boulder closer to the floor switch.' : '',
-        feature?.kind === 'switch' && mem.gatedRoute ? 'Leads toward the objective: puts the boulder on the floor switch.' : '',
+        mem.gatedRoute && freeSw.length && !feature && pushable.length > 0 && !lost && closerByPushes() ? 'Leads toward the objective: brings the boulder closer to a floor switch / hole.' : '',
+        feature && freeSw.includes(feature) && mem.gatedRoute ? `Leads toward the objective: ${feature.kind === 'switch' ? 'puts the boulder on the floor switch' : 'drops the boulder through the hole'}.` : '',
         !feature && pushable.length === 0 ? 'After this push the boulder cannot be pushed from any side.' : '',
-        !feature && pushable.length > 0 && lost ? 'After this push no sequence of pushes can bring this boulder onto a floor switch anymore.' : '',
+        !feature && pushable.length > 0 && lost ? 'After this push no sequence of pushes can bring this boulder onto a floor switch / into a hole anymore.' : '',
         mem.stuckPushes?.[`${gs.mapName}:Push boulder at (${b.x},${b.y}) ${d}`] ? `Made ${mem.stuckPushes[`${gs.mapName}:Push boulder at (${b.x},${b.y}) ${d}`]} time(s) in earlier attempts; each time the boulder was stuck afterwards.` : '',
         sw,
       ].filter(Boolean).join(' ');
@@ -752,9 +753,9 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       }
     }
     // no boulder can reach a free switch from where it is now: say so on the exits (leaving resets them)
-    const freeAll = (FLOOR_FEATURES[gs.mapName] ?? []).filter((f) => f.kind === 'switch' && !boulders.some((o) => o.x === f.x && o.y === f.y));
+    const freeAll = openTargets(gs, boulders);
     if (movedBoulder && mem.gatedRoute && freeAll.length && !boulders.some((b) => switchReachable(b, b.x, b.y, px, py, freeAll))) {
-      for (const c of out) if (c.target.kind === 'warp' || c.target.kind === 'exit') c.desc = c.desc.replace(leaveNote, ` Right now no boulder on this floor can be brought onto a floor switch from where it is.${leaveNote}`);
+      for (const c of out) if (c.target.kind === 'warp' || c.target.kind === 'exit') c.desc = c.desc.replace(leaveNote, ` Right now no boulder on this floor can be brought onto a floor switch / into a hole from where it is.${leaveNote}`);
     }
   }
 
@@ -1008,11 +1009,16 @@ export async function execute(ctx: Ctx, c: Candidate, agent: Agent): Promise<Wal
 }
 
 // Floor switches / holes that boulders can be pushed onto (visible in-game; coords from the map scripts).
-const FLOOR_FEATURES: Record<string, { x: number; y: number; kind: 'switch' | 'hole' }[]> = {
-  VICTORY_ROAD_1F: [{ x: 17, y: 13, kind: 'switch' }],
-  VICTORY_ROAD_2F: [{ x: 1, y: 16, kind: 'switch' }, { x: 9, y: 16, kind: 'switch' }],
-  VICTORY_ROAD_3F: [{ x: 3, y: 5, kind: 'switch' }, { x: 23, y: 15, kind: 'hole' }],
+// `event`: the game's flag for "a boulder is on it / went through it" (the game resets these when you leave the area)
+const FLOOR_FEATURES: Record<string, { x: number; y: number; kind: 'switch' | 'hole'; event: string }[]> = {
+  VICTORY_ROAD_1F: [{ x: 17, y: 13, kind: 'switch', event: 'EVENT_VICTORY_ROAD_1_BOULDER_ON_SWITCH' }],
+  VICTORY_ROAD_2F: [{ x: 1, y: 16, kind: 'switch', event: 'EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH1' }, { x: 9, y: 16, kind: 'switch', event: 'EVENT_VICTORY_ROAD_2_BOULDER_ON_SWITCH2' }],
+  VICTORY_ROAD_3F: [{ x: 3, y: 5, kind: 'switch', event: 'EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH1' }, { x: 23, y: 15, kind: 'hole', event: 'EVENT_VICTORY_ROAD_3_BOULDER_ON_SWITCH2' }],
 };
+/** Switches and holes on this floor still waiting for a boulder (the game's flag isn't set and none sits on it). */
+function openTargets(gs: Ctx["gs"], boulders: { x: number; y: number }[]) {
+  return (FLOOR_FEATURES[gs.mapName] ?? []).filter((f) => !gs.event(f.event) && !boulders.some((o) => o.x === f.x && o.y === f.y));
+}
 
 const FOCUS_TTL = 30;
 let lastMapWasMart = false;
@@ -1253,7 +1259,7 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
     team: /Use the PC|Pokémon Center/,
     train: /tall grass/,
     catch: /tall grass/,
-    progress: /Leads toward the objective|objective is in this place|objective takes place|Mentioned in the current objective|changes which gates are closed|floor switch opens it/,
+    progress: /Leads toward the objective|objective is in this place|objective takes place|Mentioned in the current objective|changes which gates are closed|opens it\./,
   };
   for (const c of pool) {
     const n = exempt(c) ? 0 : tried[tk(c)] ?? 0;
