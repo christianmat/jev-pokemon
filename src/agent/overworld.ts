@@ -561,9 +561,15 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
         const k1 = `${tx - ex},${ty - ey}`, k2 = `${tx + ex},${ty + ey}`;
         return g.walkable(tx - ex, ty - ey) && g.walkable(tx + ex, ty + ey) && !others.has(k1) && !others.has(k2);
       });
+      // the floor switches are visible on screen: how far this boulder would be from the nearest free one
+      const freeSw = (FLOOR_FEATURES[gs.mapName] ?? []).filter((f) => f.kind === 'switch' && !boulders.some((o) => o.x === f.x && o.y === f.y));
+      const near = (x: number, y: number) => Math.min(...freeSw.map((f) => Math.abs(f.x - x) + Math.abs(f.y - y)));
+      const sw = freeSw.length && feature?.kind !== 'switch'
+        ? `Floor switch${freeSw.length > 1 ? 'es' : ''} on this floor at ${freeSw.map((f) => `(${f.x},${f.y})`).join(', ')}; after this push the boulder is ${near(tx, ty)} squares from the nearest (now ${near(b.x, b.y)}).` : '';
       const facts = [
         `Moves the boulder one square ${d} to (${tx},${ty}).`,
         feature ? `That square is a ${feature.kind === 'switch' ? 'floor switch' : 'hole in the floor'}.` : '',
+        sw,
         !feature && pushable.length === 0 ? 'After this push the boulder cannot be pushed from any side.' : '',
         'Boulders go back to their starting spots when you leave this area.',
       ].filter(Boolean).join(' ');
