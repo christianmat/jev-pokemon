@@ -55,7 +55,8 @@ export class Agent {
     const party = gs.party();
     const wiped = gs.inBattle !== 0 && party.length > 0 && party.every((p) => p.hp === 0);
     if (wiped && !this.wipedNow) {
-      const at = gs.mapName;
+      // the Elite Four is one back-to-back challenge (a loss anywhere restarts it): count its rooms as one place
+      const at = /^(LORELEIS|BRUNOS|AGATHAS|LANCES|CHAMPIONS)_ROOM$/.test(gs.mapName) ? 'the Elite Four' : gs.mapName;
       const l = (mem.losses ??= {})[at] ??= { count: 0, team: '' };
       l.count++; l.team = party.map((p) => `${p.species} Lv${p.level}`).join(', ');
       l.moves = party.flatMap((p) => p.moves.map((m) => m.name)).sort().join(',');
