@@ -1,4 +1,5 @@
 import { mapName } from '../game/symbols.js';
+import { fieldMoveLearners } from './context.js';
 import type { Ctx } from './context.js';
 import { tap, remember, situation } from './context.js';
 import { hopsFromMap, serviceFactsFromMap } from './overworld.js';
@@ -269,9 +270,23 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     if (!ctx.mem.pcMode || label === 'Close this menu' || /^(CANCEL|STATS|DEPOSIT|WITHDRAW|RELEASE)$/.test(label) || !/^[A-Z]/.test(label)) return '';
     const isMon = party.some((p) => p.nickname === label.replace(/ \(\d+\)$/, '')) || box.some((b) => b.nickname === label.replace(/ \(\d+\)$/, ''));
     if (!isMon) return '';
-    return ctx.mem.pcMode === 'DEPOSIT' ? 'Picking it DEPOSITS it: it leaves your team and goes into the PC box.'
-      : ctx.mem.pcMode === 'WITHDRAW' ? 'Picking it WITHDRAWS it: it joins your team from the PC box.'
-      : 'Picking it RELEASES it: it is gone for good.';
+    const name = label.replace(/ \(\d+\)$/, '');
+    if (ctx.mem.pcMode === 'DEPOSIT') {
+      // field moves it takes along: whether anyone else on the team still knows them
+      const p = party.find((pp) => pp.nickname === name);
+      const fm = (p?.moves ?? []).map((m) => m.name).filter((m) => /^(CUT|SURF|STRENGTH|FLY|FLASH)$/.test(m)).map((m) => {
+        const others = party.filter((q) => q !== p && q.moves.some((mm) => mm.name === m)).map((q) => q.nickname);
+        return others.length ? `${m} (${others.join(', ')} also knows it)` : `${m} (no other team member knows it)`;
+      });
+      return `Picking it DEPOSITS it: it leaves your team and goes into the PC box.${fm.length ? ` Knows field moves: ${fm.join(', ')}.` : ''}`;
+    }
+    if (ctx.mem.pcMode === 'WITHDRAW') {
+      const need = ctx.mem.fieldMoveNeeded;
+      const l = need ? fieldMoveLearners(ctx, need) : undefined;
+      const hmFact = !need || !l ? '' : l.box.some((t) => t.startsWith(`${name} (`)) ? ` Can learn ${need}.` : (l.afterEvolving.find((t) => t.startsWith(`in the PC box: ${name} (`)) ?? '').replace(/^in the PC box: [^)]*\) /, ` Can't learn ${need} now; `) + (l.afterEvolving.some((t) => t.startsWith(`in the PC box: ${name} (`)) ? '.' : '');
+      return `Picking it WITHDRAWS it: it joins your team from the PC box.${hmFact}`;
+    }
+    return 'Picking it RELEASES it: it is gone for good.';
   };
   for (const o of opts) criteria[o.text] = `Menu option "${o.text}". ${pcListNote(o.text)} ${MENU_FACTS[o.text] ?? ''} ${floorFact(o.text)} ${pcFact(o.text)} ${itemRule(o.text)} ${extraFacts(o.text) || boxFacts(o.text) || partyFacts(o.text)} ${price(o.text)}`.replace(/\s+/g, ' ').trim();
   // Mechanics Jev can always use: scroll a list that has more entries, and back out of any menu.
@@ -293,7 +308,7 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     }
   }
   // (not in battle party screens: after a faint the game requires a choice and B does nothing)
-  if (!opts.some((o) => /^(CANCEL|EXIT|NO|QUIT)$/.test(o.text)) && !(ctx.gs.inBattle && isPartyMenu(ctx))) criteria[CLOSE] = `Leave this menu without choosing anything (B button).${elevatorNow()}`;
+  if (!opts.some((o) => /^(CANCEL|EXIT|NO|QUIT)$/.test(o.text)) && !(ctx.gs.inBattle && isPartyMenu(ctx))) criteria[CLOSE] = `Leave this menu without choosing anything (B button).${elevatorNow()}${ctx.mem.pcMode === 'DEPOSIT' && party.length >= 6 && opts.some((o) => party.some((p) => p.nickname === o.text)) ? ' Nobody is deposited: the team stays full (6/6), so nothing can be withdrawn.' : ''}`;
   const seenKey = screenText + '|' + opts.map((o) => o.text).join('|');
   const repeats = (menuRepeats.get(seenKey) ?? 0) + 1;
   menuRepeats.set(seenKey, repeats);
