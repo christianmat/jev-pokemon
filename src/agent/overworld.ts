@@ -862,6 +862,16 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     // moving on isn't offered while that holds, so exits carry no toward/away-from-the-objective claims either
     for (const c of out) c.desc = c.desc.replace(/ ?(Leads toward the objective|Leads away from the objective|Same distance from the objective|Does not lead toward the objective) \((?:[^()]|\([^()]*\))*\)( \(by the map layout[^)]*\))?\./g, '').trim();
   }
+  // inside the Elite Four the way back is sealed (the entrance closes behind you): no exits back to the lobby / earlier rooms
+  if (E4_ROOMS.test(gs.mapName)) {
+    const order = ['INDIGO_PLATEAU_LOBBY', 'LORELEIS_ROOM', 'BRUNOS_ROOM', 'AGATHAS_ROOM', 'LANCES_ROOM', 'CHAMPIONS_ROOM'];
+    const here = order.indexOf(gs.mapName);
+    for (const c of [...out]) {
+      if (c.target.kind !== 'warp' && c.target.kind !== 'exit') continue;
+      const di = order.indexOf(rom.maps.get(c.target.dest)?.name ?? '');
+      if (di >= 0 && di < here) out.splice(out.indexOf(c), 1);
+    }
+  }
   // can a Pokémon Center be reached from here at all? (a heal focus with no way to one isn't offered)
   healReachable = { map: gs.mapId, ok: PC_MAPS.test(gs.mapName) || out.some((c) => /Pokémon Center/.test(c.desc) || c.key.includes('NURSE')),
     mart: MART_MAPS.test(gs.mapName) || /MART/.test(gs.mapName) || out.some((c) => /Poké Mart/.test(c.desc) || c.key.includes('CLERK')) };
