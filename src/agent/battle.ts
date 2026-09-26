@@ -1,5 +1,5 @@
 import type { Ctx } from './context.js';
-import { tap, situation, remember, rememberDialog } from './context.js';
+import { tap, situation, remember, rememberDialog, fieldMoveLearners } from './context.js';
 import { findLabel, select, cursorTo, cursorToIndex, decideMenu, confirmA } from './menus.js';
 import { advanceText, isNamingScreen, dialogStep } from './dialog.js';
 import { sym } from '../game/symbols.js';
@@ -99,7 +99,7 @@ async function decideBattle(ctx: Ctx) {
     const bestEff = attacks.length ? Math.max(...attacks.map((m) => rom.effectiveness(m.type, b.enemy.types))) : -1;
     const threat = Math.max(...b.enemy.types.map((t) => rom.effectiveness(t, p.types)));
     const key = `Switch to ${p.nickname}`;
-    opts[key] = `Switch to ${p.nickname} (${p.species} Lv${p.level}, ${p.types.join('/')}, HP ${p.hp}/${p.maxHp}). ${bestEff < 0 ? 'It has no damaging moves;' : `Its best damaging move is ${effWord(bestEff)} vs the enemy;`} enemy's type is ${effWord(threat)} against it. Switching uses the turn.`;
+    opts[key] = `Switch to ${p.nickname} (${p.species} Lv${p.level}, ${p.types.join('/')}, HP ${p.hp}/${p.maxHp}). ${bestEff < 0 ? 'It has no damaging moves;' : `Its best damaging move is ${effWord(bestEff)} vs the enemy;`} enemy's type is ${effWord(threat)} against it. Switching uses the turn.${hmPathFact(ctx, p.nickname)}`;
     actions[key] = () => { if (!select(ctx, 'PKMN')) return; ctx.emu.wait(20); cursorToIndex(ctx, p.slot); confirmA(ctx); if (!select(ctx, 'SWITCH')) tap(ctx, 'B', 20); ctx.emu.wait(20); };
   }
 
@@ -238,4 +238,14 @@ export async function battleStep(ctx: Ctx) {
   }
   if (s.dialog) rememberDialog(ctx.mem, s.dialog);
   advanceText(ctx, 90);
+}
+
+/** A team member on its way to the field move the objective needs (e.g. evolving at a level): say so, and how levels come. */
+function hmPathFact(ctx: Ctx, nickname: string): string {
+  const need = ctx.mem.fieldMoveNeeded;
+  if (!need) return '';
+  const l = fieldMoveLearners(ctx, need);
+  const t = l.afterEvolving.find((x) => x.startsWith(`in the party: ${nickname} (`));
+  if (!t) return '';
+  return ` ${t.replace(/^in the party: [^)]*\) /, '')} (the objective needs a team Pokémon that knows ${need}). Every Pokémon that takes part in a battle gets a share of its experience.`;
 }
