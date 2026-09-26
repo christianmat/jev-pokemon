@@ -828,6 +828,12 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const t = c.target as { x?: number; y?: number };
     if (t.x !== undefined) c.key = c.key.replace(/^Enter /, `Take the exit at (${t.x},${t.y}) to `);
   }
+  // this floor still has a switch / hole waiting for a boulder while the way is gated: leaving the floor can't get
+  // past a gate this floor opens, so exits make no layout "toward" claim
+  const liveBoulders = gs.sprites().filter((sp) => !sp.hidden && SPRITES[sp.picture] === 'BOULDER');
+  if (mem.gatedRoute && openTargets(gs, liveBoulders).length) {
+    for (const c of out) if (c.target.kind === 'warp' || c.target.kind === 'exit') c.desc = c.desc.replace(/ ?Leads toward the objective \(\d+ area\(s\) away from it\) \(by the map layout; a gate on the way is closed right now\)\./, '');
+  }
   // gated, and nothing reachable leads toward the objective by the layout: then "away" (by layout) says nothing
   // useful either (the layout's way runs through a closed part), so drop those claims
   if (mem.gatedRoute && !out.some((c) => /Leads toward the objective/.test(c.desc))) {
