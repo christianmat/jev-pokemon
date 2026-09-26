@@ -132,6 +132,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   // distances to services (nearest Pokémon Center / Mart), for healing and shopping intents
   const serviceDist = (re: RegExp) => rg.distancesTo(Object.entries((gen as any).maps).filter(([, v]: any) => re.test(v.name)).flatMap(([id]) => rg.regionsOf(+id)), skip);
   const pcDist = serviceDist(/POKECENTER/), martDist = serviceDist(/_MART$/);
+  lastServiceDist = { pc: pcDist, mart: martDist };
   const hereReg = hereRegion ? [hereRegion] : [];
   const svc = (regions: string[]) => {
     const f = (d: Map<string, number>, label: string) => {
@@ -266,7 +267,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       // which floors it serves, and how far each is from the objective
       const floors = [...rom.maps.values()].filter((mm) => mm.warps.some((w) => w.destMap === gs.mapId)).map((mm) => {
         const h = hopsFromMap(mm.id, gs.mapId);
-        return `${mm.name.replace(/^.*_/, '')}${h !== undefined ? ` (${h} areas from the objective)` : ''}`;
+        const pc = /POKECENTER/.test(serviceFactsFromMap(mm.id, gs.mapId)) ? ', toward the nearest Pokémon Center' : '';
+        return `${mm.name.replace(/^.*_/, '')}${h !== undefined ? ` (${h} areas from the objective${pc})` : pc ? ` (${pc.slice(2)})` : ''}`;
       });
       add(`Use the elevator panel at (${sg.x},${sg.y})`, `The elevator's floor-select panel: choose which floor the doors lead to. Floors: ${floors.join(', ')}.${said ? ` Last time it said: "${clip(said)}".` : ''}`, { kind: 'sign', x: sg.x, y: sg.y }, path);
     }
@@ -728,17 +730,36 @@ let lastObjectiveDist: { dist: Map<string, number>; rg: ReturnType<typeof region
 export function hopsFromMap(mapId: number, via?: number): number | undefined {
   const o = lastObjectiveDist;
   if (!o) return undefined;
-  // arriving from `via` (e.g. an elevator): only the areas its doors actually lead into count
-  const md = via !== undefined ? o.rg.mapData(mapId) : undefined;
-  const regions = md ? md.warps.filter((w) => w.destMap === via).map((w) => o.rg.regionAt(mapId, w.x, w.y)).filter((r): r is string => !!r) : [];
-  if (regions.length) {
+  const regions = arrivalRegions(mapId, via);
+  if (regions) {
     if (o.atRegion ? regions.includes(o.atRegion) : o.objMaps.includes(mapId)) return 0;
-  } else {
-    if (o.objMaps.includes(mapId)) return 0;
-    regions.push(...o.rg.regionsOf(mapId));
+    return hopsIn(o.dist, regions);
   }
-  const h = Math.min(Infinity, ...regions.map((r) => o.dist.get(r) ?? Infinity));
+  if (o.objMaps.includes(mapId)) return 0;
+  return hopsIn(o.dist, o.rg.regionsOf(mapId));
+}
+// arriving from `via` (e.g. an elevator): only the areas its doors actually lead into count
+function arrivalRegions(mapId: number, via?: number): string[] | undefined {
+  const o = lastObjectiveDist;
+  const md = via !== undefined && o ? o.rg.mapData(mapId) : undefined;
+  const regions = md ? md.warps.filter((w) => w.destMap === via).map((w) => o!.rg.regionAt(mapId, w.x, w.y)).filter((r): r is string => !!r) : [];
+  return regions.length ? regions : undefined;
+}
+function hopsIn(dist: Map<string, number>, regions: string[]) {
+  const h = Math.min(Infinity, ...regions.map((r) => dist.get(r) ?? Infinity));
   return isFinite(h) ? h : undefined;
+}
+let lastServiceDist: { pc: Map<string, number>; mart: Map<string, number> } | null = null;
+/** " Toward the nearest Pokémon Center (N areas)." etc. for a map entered from `via`, when closer than `from` */
+export function serviceFactsFromMap(mapId: number, via: number): string {
+  const o = lastObjectiveDist, sv = lastServiceDist;
+  if (!o || !sv) return '';
+  const regions = arrivalRegions(mapId, via) ?? o.rg.regionsOf(mapId);
+  const f = (d: Map<string, number>, label: string) => {
+    const here = hopsIn(d, o.rg.regionsOf(via)), there = hopsIn(d, regions);
+    return there !== undefined && (here === undefined || there < here) ? ` Toward the nearest ${label} (${there} areas).` : '';
+  };
+  return f(sv.pc, 'Pokémon Center') + f(sv.mart, 'Poké Mart');
 }
 let pendingItem: { name: string; sig: string } | null = null;
 const itemSig = (ctx: Ctx) => `${ctx.gs.bag().map((i) => i.name + i.qty).join(',')}|${ctx.gs.party().map((p) => p.level + p.moves.map((m) => m.name).join('+') + p.hp + p.status).join(',')}`;

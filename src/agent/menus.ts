@@ -1,7 +1,7 @@
 import { mapName } from '../game/symbols.js';
 import type { Ctx } from './context.js';
 import { tap, remember, situation } from './context.js';
-import { hopsFromMap } from './overworld.js';
+import { hopsFromMap, serviceFactsFromMap } from './overworld.js';
 
 // Generic screen-reading helpers for menus. They move a cursor to a label that is ON SCREEN;
 // what to pick is always decided elsewhere (by Jev).
@@ -254,7 +254,7 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     const h = m ? hopsFromMap(m.id, ctx.gs.mapId) : undefined;
     const here = hopsFromMap(ctx.gs.mapId);
     const cmp = h === undefined || here === undefined ? '' : h < here ? ' Leads toward the objective.' : h > here ? ' Leads away from the objective.' : '';
-    return m ? `Sets the elevator doors to lead to ${m.name}.${h !== undefined ? ` That floor is ${h} area(s) from the objective (the elevator is ${here ?? '?'}).${cmp}` : ''}` : '';
+    return m ? `Sets the elevator doors to lead to ${m.name}.${h !== undefined ? ` That floor is ${h} area(s) from the objective (the elevator is ${here ?? '?'}).${cmp}` : ''}${serviceFactsFromMap(m.id, ctx.gs.mapId)}` : '';
   };
   // in a BILL's PC pick list: say what picking a Pokémon does
   const pcListNote = (label: string) => {
@@ -281,7 +281,7 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     if (/ELEVATOR/.test(ctx.gs.mapName)) {
       const shown = new Set(opts.map((o) => o.text));
       const rest = [...ctx.rom.maps.values()].filter((mm) => mm.warps.some((w) => w.destMap === ctx.gs.mapId)).map((mm) => mm.name.replace(/^.*_/, '')).filter((f) => !shown.has(f));
-      if (rest.length) criteria[MORE] += ` Further floors: ${rest.map((f) => { const fm = [...ctx.rom.maps.values()].find((mm) => mm.name.endsWith(`_${f}`) && mm.warps.some((w) => w.destMap === ctx.gs.mapId)); const h = fm ? hopsFromMap(fm.id, ctx.gs.mapId) : undefined; const here = hopsFromMap(ctx.gs.mapId); return h !== undefined ? `${f} (${h} areas from the objective${here !== undefined && h < here ? ', toward it' : ''})` : f; }).join(', ')}.`;
+      if (rest.length) criteria[MORE] += ` Further floors: ${rest.map((f) => { const fm = [...ctx.rom.maps.values()].find((mm) => mm.name.endsWith(`_${f}`) && mm.warps.some((w) => w.destMap === ctx.gs.mapId)); const h = fm ? hopsFromMap(fm.id, ctx.gs.mapId) : undefined; const here = hopsFromMap(ctx.gs.mapId); const pc = fm && /POKECENTER/.test(serviceFactsFromMap(fm.id, ctx.gs.mapId)) ? ', toward the nearest Pokémon Center' : ''; return h !== undefined ? `${f} (${h} areas from the objective${here !== undefined && h < here ? ', toward it' : ''}${pc})` : f; }).join(', ')}.`;
     }
   }
   // (not in battle party screens: after a faint the game requires a choice and B does nothing)
