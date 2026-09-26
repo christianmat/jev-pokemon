@@ -12,6 +12,8 @@ const menuRepeats = new Map<string, number>();
 const menuHistory = new Map<string, { choice: string; streak: number }>();
 /** per menu screen: how many times in a row it was closed without choosing anything */
 const menuCloses = new Map<string, number>();
+/** "See more" picks in a row */
+let moreStreak = 0;
 
 export interface Label { text: string; x: number; y: number; index?: number }
 
@@ -341,6 +343,8 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     if (ctx.mem.pcMode || ctx.mem.pcSession) { ctx.mem.pcDone = true; ctx.mem.pcMode = undefined; ctx.mem.pcSession = undefined; }
     return CLOSE;
   }
+  // scrolling a list over and over (it can wrap around): after 6 scrolls in a row, stop offering it
+  if (moreStreak >= 6 && criteria[MORE]) delete criteria[MORE];
   const histKey = opts.map((o) => o.text).join('|');
   const hist = menuHistory.get(histKey);
   // only for answers that leave without doing anything (a working answer like BUY isn't a sign of a loop)
@@ -348,6 +352,7 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   const focus = ctx.mem.intent?.value;
   const asked = await ctx.jev.chooseP(purpose, { ...situation(ctx), currentFocus: focus, screen: screenText }, `A menu is open on screen.${focus ? ` The player's current focus is: ${focus}.` : ''} Which option best serves that focus and the objective?${/BUY|MONEY/.test(screenText) ? ` Money: ¥${ctx.gs.money}.` : ' Item rule: only use an item where it actually works (Poké Balls only in wild battles, healing items only on hurt Pokémon, TMs/HMs to teach moves outside battle).'} Rule: if this same menu keeps coming back after your answer, your last answer isn't working — choose a different option.${repeats >= 2 ? ` This exact menu has appeared ${repeats} times.` : ''}`, criteria);
   let choice = asked.choice;
+  moreStreak = choice === MORE ? moreStreak + 1 : 0;
   // Loop rule (same as the overworld one): closing this exact menu again and again changes nothing, so after
   // 2 closes in a row, a 3rd close is replaced by one of Jev's other answers, weighted by Jev's own probabilities
   const closeKey = `${screenText}|${histKey}`;
