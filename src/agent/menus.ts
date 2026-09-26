@@ -313,17 +313,17 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   const asked = await ctx.jev.chooseP(purpose, { ...situation(ctx), currentFocus: focus, screen: screenText }, `A menu is open on screen.${focus ? ` The player's current focus is: ${focus}.` : ''} Which option best serves that focus and the objective?${/BUY|MONEY/.test(screenText) ? ` Money: ¥${ctx.gs.money}.` : ' Item rule: only use an item where it actually works (Poké Balls only in wild battles, healing items only on hurt Pokémon, TMs/HMs to teach moves outside battle).'} Rule: if this same menu keeps coming back after your answer, your last answer isn't working — choose a different option.${repeats >= 2 ? ` This exact menu has appeared ${repeats} times.` : ''}`, criteria);
   let choice = asked.choice;
   // Loop rule (same as the overworld one): closing this exact menu again and again changes nothing, so after
-  // 3 closes in a row, sample one of Jev's other answers, weighted by Jev's own probabilities
+  // 2 closes in a row, a 3rd close is replaced by one of Jev's other answers, weighted by Jev's own probabilities
   const closeKey = `${screenText}|${histKey}`;
   const closes = choice === CLOSE ? (menuCloses.get(closeKey) ?? 0) + 1 : 0;
   menuCloses.set(closeKey, closes);
   if (menuCloses.size > 300) menuCloses.clear();
-  if (closes > 3 && asked.probabilities) {
-    const alts = Object.entries(asked.probabilities).filter(([k]) => k !== CLOSE && criteria[k] && !/RELEASE|TOSS|SELL|DEPOSIT/.test(k)); // never force a hard-to-undo action
+  if (closes >= 3 && asked.probabilities) { // (before the 5-repeats back-out can end the menu)
+    const alts = Object.entries(asked.probabilities).filter(([k]) => k !== CLOSE && criteria[k] && !/RELEASE|TOSS|SELL|DEPOSIT/i.test(`${k} ${criteria[k]}`)); // never force a hard-to-undo action (incl. picking a team member in a deposit list)
     const total = alts.reduce((a, [, p]) => a + p + 0.05, 0);
     let r = Math.random() * total;
     for (const [k, p] of alts) { r -= p + 0.05; if (r <= 0) { choice = k; break; } }
-    if (choice !== CLOSE) { ctx.log('info', `menu closed ${closes - 1}x in a row with no change → trying "${choice}" instead`); menuCloses.set(closeKey, 0); }
+    if (choice !== CLOSE) { ctx.log('info', `menu closed ${closes - 1}x in a row with no change (a 3rd close) → trying "${choice}" instead`); menuCloses.set(closeKey, 0); }
   }
   remember(ctx.mem.actions, `menu[${opts.map((o) => o.text).join('|')}] -> ${choice}`, 12);
   menuHistory.set(histKey, { choice, streak: hist?.choice === choice ? hist.streak + 1 : 1 });
