@@ -356,7 +356,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const label = HIDDEN_LABEL.find(([re]) => re.test(h.fn))?.[1] ?? `Examine ${h.fn.replace(/^(Print|Display)/, '').replace(/Text$/, '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()}`;
     const k = `${gs.mapName}:hidden${h.x},${h.y}`;
     const said = mem.npcText[k];
-    const pcObj = mem.subObjective && label === 'Use the PC' ? ' Mentioned in the current objective (the PC box).' : '';
+    const pcObj = mem.subObjective?.includes('the PC box') && label === 'Use the PC' ? ' Mentioned in the current objective (the PC box).' : '';
     add(`${label} at (${h.x},${h.y})`, (said ? `Examined before: "${clip(said)}".` : 'Not examined yet.') + pcObj, { kind: 'hidden', x: h.x, y: h.y, face }, path);
   }
 
@@ -827,7 +827,7 @@ function hopsIn(dist: Map<string, number>, regions: string[]) {
   const h = Math.min(Infinity, ...regions.map((r) => dist.get(r) ?? Infinity));
   return isFinite(h) ? h : undefined;
 }
-let lastObjectiveReachable = true;
+let lastObjectiveReachable = true; // updated by every candidate build
 let lastServiceDist: { pc: Map<string, number>; mart: Map<string, number> } | null = null;
 /** " Toward the nearest Pokémon Center (N areas)." etc. for a map entered from `via`, when closer than `from` */
 export function serviceFactsFromMap(mapId: number, via: number): string {
