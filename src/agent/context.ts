@@ -176,15 +176,47 @@ export function fieldMoveLearners(ctx: Ctx, mv: 'CUT' | 'SURF') {
   const later = (list: { speciesId: number; nickname: string; species: string; level: number }[]) =>
     list.filter((p) => !can(p.speciesId)).map((p) => { const v = viaEvo(p.speciesId); return v ? `${p.nickname} (${p.species} Lv${p.level}) ${v}` : ''; }).filter(Boolean);
   const party = ctx.gs.party(), box = ctx.gs.box();
+  // what each way takes: levels to gain, items to use, PC moves, then teaching the HM (plain counts, no ranking)
+  const chain = (speciesId: number, depth = 0): { level?: number; item?: string }[] | undefined => {
+    if (can(speciesId)) return [];
+    if (depth > 2) return undefined;
+    for (const e of ctx.rom.evolutions(speciesId)) {
+      if (e.method === 'trade') continue;
+      const rest = chain(e.into, depth + 1);
+      if (rest) return [e.method === 'level' ? { level: e.level } : { item: ctx.rom.items.get(e.item!) ?? '?' }, ...rest];
+    }
+    return undefined;
+  };
+  const routes: string[] = [];
+  const describe = (m: { speciesId: number; nickname: string; species: string; level: number }, inBox: boolean) => {
+    const c = chain(m.speciesId);
+    if (!c) return;
+    // level evolutions happen on a level-up: one past its evolution level still needs one more level
+    const lvSteps = c.filter((x) => x.level !== undefined).map((x) => x.level!);
+    const lv = lvSteps.length ? Math.max(m.level + 1, ...lvSteps) : m.level;
+    const levels = lv - m.level;
+    const items = c.filter((x) => x.item).map((x) => x.item!);
+    if (items.some((i) => !bag.has(i))) return; // an item that isn't in the bag: not a way right now
+    const parts = [
+      ...(inBox ? [party.length >= 6 ? 'at a Pokémon Center PC: deposit one team member and withdraw it' : 'at a Pokémon Center PC: withdraw it'] : []),
+      ...(levels > 0 ? [`gain ${levels} level(s) (Lv${m.level} → Lv${lv})`] : []),
+      ...items.map((i) => `use the ${i}`),
+      `teach ${HM_FOR[mv].hm}`,
+    ];
+    routes.push(`${m.nickname} (${m.species}, ${inBox ? 'PC box' : 'team'}): ${parts.join(', then ')}`);
+  };
+  for (const m of party) describe(m, false);
+  for (const m of box) describe(m, true);
   return {
     party: party.filter((p) => can(p.speciesId)).map((p) => `${p.nickname} (${p.species} Lv${p.level})`),
     box: box.filter((b) => can(b.speciesId)).map((b) => `${b.nickname} (${b.species} Lv${b.level})`),
     afterEvolving: [...later(party).map((t) => `in the party: ${t}`), ...later(box).map((t) => `in the PC box: ${t}`)],
+    routes,
   };
 }
 function fieldMoveFact(ctx: Ctx, mv: 'CUT' | 'SURF') {
   const h = HM_FOR[mv];
   const l = fieldMoveLearners(ctx, mv);
   const inBag = ctx.gs.bag().some((i) => i.name === h.hm);
-  return `The objective can't be reached from here without ${mv}, and no party Pokémon knows ${mv}. ${h.hm} teaches ${mv} (${inBag ? 'it is in the bag; HMs can be used any number of times' : 'not in the bag'}); using ${mv} outside battle needs the ${h.badgeName}${ctx.gs.badges & h.badge ? ' (you have it)' : ' (you don\'t have it yet)'}. Party Pokémon that can learn ${h.hm}: ${l.party.join(', ') || 'none'}. Pokémon in the PC box that can learn it: ${l.box.join(', ') || 'none'}.${l.afterEvolving.length ? ` Able to learn it only after evolving: ${l.afterEvolving.join('; ')}.` : ''}`;
+  return `The objective can't be reached from here without ${mv}, and no party Pokémon knows ${mv}. ${h.hm} teaches ${mv} (${inBag ? 'it is in the bag; HMs can be used any number of times' : 'not in the bag'}); using ${mv} outside battle needs the ${h.badgeName}${ctx.gs.badges & h.badge ? ' (you have it)' : ' (you don\'t have it yet)'}. Party Pokémon that can learn ${h.hm}: ${l.party.join(', ') || 'none'}. Pokémon in the PC box that can learn it: ${l.box.join(', ') || 'none'}.${l.afterEvolving.length ? ` Able to learn it only after evolving: ${l.afterEvolving.join('; ')}.` : ''}${l.routes.length ? ` What each way takes: ${l.routes.join('; ')}.` : ''}`;
 }
