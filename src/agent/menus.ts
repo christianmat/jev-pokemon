@@ -99,7 +99,7 @@ export function readMenuOptions(ctx: Ctx): Label[] {
     for (let i = 0; i <= max && i < 12; i++) {
       const y = topY + i * step;
       if (y >= 18) break;
-      const text = clean(s.rows[y].slice(topX + 1));
+      const text = clean(s.cells[y].slice(topX + 1).join(''));
       if (text) tmp.push({ text, x: topX + 1, y, index: i });
     }
     const wordy = tmp.every((t) => LABEL.test(t.text));
@@ -107,12 +107,12 @@ export function readMenuOptions(ctx: Ctx): Label[] {
   }
   // Fallback: rows of the cursor's box, in the cursor column, same spacing as the register layout
   const col = s.cursor.x;
-  const inBox = (y: number) => /[│ ▶▷]/.test(s.rows[y][col] ?? '') && !/[─┌└┐┘]/.test(s.rows[y][col] ?? '');
+  const inBox = (y: number) => /[│ ▶▷]/.test(s.cells[y][col] ?? '') && !/[─┌└┐┘]/.test(s.cells[y][col] ?? '');
   let top = s.cursor.y, bot = s.cursor.y;
   while (top > 0 && inBox(top - 1)) top--;
   while (bot < 17 && inBox(bot + 1)) bot++;
   for (let y = top; y <= bot; y++) {
-    const text = clean(s.rows[y].slice(col + 1));
+    const text = clean(s.cells[y].slice(col + 1).join(''));
     if (text && LABEL.test(text)) opts.push({ text, x: col + 1, y });
   }
   return opts;

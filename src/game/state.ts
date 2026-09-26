@@ -20,6 +20,7 @@ export interface ScreenState {
   waitingForA: boolean;     // ▼ prompt visible in the dialog box
   moreBelow: boolean;       // a list shows a ▼ 'more items' arrow
   cursor: { x: number; y: number } | null; // ▶ position
+  cells: string[][];        // per row, the decoded text of each tile (a tile can decode to several chars, e.g. POKé)
 }
 
 const STATUS = (b: number) =>
@@ -157,6 +158,7 @@ export class GameState {
   screen(): ScreenState {
     const base = sym('wTileMap');
     const rows: string[] = [];
+    const cells: string[][] = [];
     let hasTextBox = false, waitingForA = false, moreBelow = false, nonMapTiles = 0;
     let cursor: ScreenState['cursor'] = null;
     for (let y = 0; y < 18; y++) {
@@ -170,9 +172,10 @@ export class GameState {
         if (t === 0xee && y < 12) moreBelow = true; // ▼ in the dialog box; a ▼ higher up is a list's 'more below' arrow
       }
       rows.push(decodeRow(tiles));
+      cells.push(Array.from(tiles, (t) => decodeRow([t])));
     }
     const dialog = hasTextBox ? [rows[14], rows[16]].map((r) => r.replace(/[┌─┐│└┘]/g, '').trim()).filter(Boolean).join(' ') : '';
-    return { rows, hasTextBox, nonMapTiles, dialog, waitingForA, moreBelow, cursor };
+    return { rows, hasTextBox, nonMapTiles, dialog, waitingForA, moreBelow, cursor, cells };
   }
 
   /** Menu registers (cursor-driven menus). */
