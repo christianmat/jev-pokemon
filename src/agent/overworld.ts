@@ -150,7 +150,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     if (mem.fieldMoveNeeded) {
       const l = fieldMoveLearners(ctx, mem.fieldMoveNeeded);
       const inBox = l.box.length > 0 || l.afterEvolving.some((t) => t.startsWith('in the PC box') && /one is in the bag/.test(t));
-      const inParty = l.party.length > 0 || l.afterEvolving.some((t) => t.startsWith('in the party') && /one is in the bag/.test(t));
+      const inParty = l.party.length > 0 || l.afterEvolving.some((t) => t.startsWith('in the party') && !/none in the bag/.test(t));
       // a team member can already get there (learn it now, or evolve with an item in the bag): no PC trip needed
       if (inParty) mem.subObjective = `a team Pokémon that knows ${mem.fieldMoveNeeded} (a team member can ${l.party.length ? 'learn it' : 'learn it after evolving'})`;
       else if (inBox) {
