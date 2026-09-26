@@ -61,6 +61,7 @@ export class RegionGraph {
   }
 
   grid(map: number) { return this.grids.get(map); }
+  mapData(map: number) { return this.rom.maps.get(map); }
 
   /** Squares on a map that are occupied right now (people who never move): kept out of that map's regions. */
   private extraBlocked = new Map<number, Set<string>>();

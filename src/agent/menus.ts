@@ -248,7 +248,7 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     if (!/ELEVATOR/.test(ctx.gs.mapName) || !/^B?\d{1,2}F$/.test(label)) return '';
     const served = [...ctx.rom.maps.values()].filter((m) => m.warps.some((w) => w.destMap === ctx.gs.mapId));
     const m = served.find((mm) => mm.name.endsWith(`_${label}`));
-    const h = m ? hopsFromMap(m.id) : undefined;
+    const h = m ? hopsFromMap(m.id, ctx.gs.mapId) : undefined;
     return m ? `Sets the elevator doors to lead to ${m.name}.${h !== undefined ? ` That floor is ${h} area(s) from the objective.` : ''}` : '';
   };
   // in a BILL's PC pick list: say what picking a Pokémon does
@@ -269,7 +269,7 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     if (/ELEVATOR/.test(ctx.gs.mapName)) {
       const shown = new Set(opts.map((o) => o.text));
       const rest = [...ctx.rom.maps.values()].filter((mm) => mm.warps.some((w) => w.destMap === ctx.gs.mapId)).map((mm) => mm.name.replace(/^.*_/, '')).filter((f) => !shown.has(f));
-      if (rest.length) criteria[MORE] += ` Further floors: ${rest.map((f) => { const fm = [...ctx.rom.maps.values()].find((mm) => mm.name.endsWith(`_${f}`) && mm.warps.some((w) => w.destMap === ctx.gs.mapId)); const h = fm ? hopsFromMap(fm.id) : undefined; return h !== undefined ? `${f} (${h} areas from the objective)` : f; }).join(', ')}.`;
+      if (rest.length) criteria[MORE] += ` Further floors: ${rest.map((f) => { const fm = [...ctx.rom.maps.values()].find((mm) => mm.name.endsWith(`_${f}`) && mm.warps.some((w) => w.destMap === ctx.gs.mapId)); const h = fm ? hopsFromMap(fm.id, ctx.gs.mapId) : undefined; return h !== undefined ? `${f} (${h} areas from the objective)` : f; }).join(', ')}.`;
     }
   }
   // (not in battle party screens: after a faint the game requires a choice and B does nothing)

@@ -104,7 +104,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   const objRegions = atRegion ? [atRegion] : objMaps.flatMap((id) => rg.regionsOf(id));
   const inObjective = (map: number, regions: (string | null)[]) => (atRegion ? regions.includes(atRegion) : objMaps.includes(map));
   const dist = rg.distancesTo(objRegions, skip);
-  lastObjectiveDist = { dist, rg, objMaps };
+  lastObjectiveDist = { dist, rg, objMaps, atRegion };
   destRegionsByKey.clear();
   const hereRegion = rg.regionAt(gs.mapId, px, py);
   const hereHops = inObjective(gs.mapId, [hereRegion]) ? 0 : (hereRegion ? dist.get(hereRegion) : undefined) ?? Infinity;
@@ -265,8 +265,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     else if (/ELEVATOR/.test(gs.mapName)) {
       // which floors it serves, and how far each is from the objective
       const floors = [...rom.maps.values()].filter((mm) => mm.warps.some((w) => w.destMap === gs.mapId)).map((mm) => {
-        const h = Math.min(Infinity, ...rg.regionsOf(mm.id).map((r) => dist.get(r) ?? Infinity));
-        return `${mm.name.replace(/^.*_/, '')}${isFinite(h) ? ` (${objMaps.includes(mm.id) ? 0 : h} areas from the objective)` : ''}`;
+        const h = hopsFromMap(mm.id, gs.mapId);
+        return `${mm.name.replace(/^.*_/, '')}${h !== undefined ? ` (${h} areas from the objective)` : ''}`;
       });
       add(`Use the elevator panel at (${sg.x},${sg.y})`, `The elevator's floor-select panel: choose which floor the doors lead to. Floors: ${floors.join(', ')}.${said ? ` Last time it said: "${clip(said)}".` : ''}`, { kind: 'sign', x: sg.x, y: sg.y }, path);
     }
@@ -723,12 +723,21 @@ function overworldReady(ctx: Ctx): boolean {
   return false;
 }
 let busyWaited = 0;
-let lastObjectiveDist: { dist: Map<string, number>; rg: ReturnType<typeof regionGraph>; objMaps: number[] } | null = null;
+let lastObjectiveDist: { dist: Map<string, number>; rg: ReturnType<typeof regionGraph>; objMaps: number[]; atRegion: string | null } | null = null;
 /** Areas from a map to the current objective (from the latest overworld decision), for menus like elevator floors. */
-export function hopsFromMap(mapId: number): number | undefined {
-  if (!lastObjectiveDist) return undefined;
-  if (lastObjectiveDist.objMaps.includes(mapId)) return 0;
-  const h = Math.min(Infinity, ...lastObjectiveDist.rg.regionsOf(mapId).map((r) => lastObjectiveDist!.dist.get(r) ?? Infinity));
+export function hopsFromMap(mapId: number, via?: number): number | undefined {
+  const o = lastObjectiveDist;
+  if (!o) return undefined;
+  // arriving from `via` (e.g. an elevator): only the areas its doors actually lead into count
+  const md = via !== undefined ? o.rg.mapData(mapId) : undefined;
+  const regions = md ? md.warps.filter((w) => w.destMap === via).map((w) => o.rg.regionAt(mapId, w.x, w.y)).filter((r): r is string => !!r) : [];
+  if (regions.length) {
+    if (o.atRegion ? regions.includes(o.atRegion) : o.objMaps.includes(mapId)) return 0;
+  } else {
+    if (o.objMaps.includes(mapId)) return 0;
+    regions.push(...o.rg.regionsOf(mapId));
+  }
+  const h = Math.min(Infinity, ...regions.map((r) => o.dist.get(r) ?? Infinity));
   return isFinite(h) ? h : undefined;
 }
 let pendingItem: { name: string; sig: string } | null = null;
