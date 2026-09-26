@@ -307,7 +307,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   };
   const visitFacts = (dest: number) => {
     const n = mem.visitedMaps[mapName(dest)] ?? 0;
-    return n ? `Visited ${n} time(s) before.` : 'Unvisited place.';
+    const wl = rom.wildLevels(dest);
+    return (n ? `Visited ${n} time(s) before.` : 'Unvisited place.') + (wl ? ` Wild Pokémon appear there (Lv${wl.min}-${wl.max}).` : '');
   };
 
   const out: Candidate[] = [];
@@ -1299,8 +1300,8 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
     heal: /Pokémon Center|heals the whole party|NURSE/,
     shop: /Poké Mart|Shop clerk|CLERK/,
     team: /Use the PC|Pokémon Center/,
-    train: /tall grass|meet wild Pokémon/,
-    catch: /tall grass|meet wild Pokémon/,
+    train: /tall grass|meet wild Pokémon|Wild Pokémon appear there/,
+    catch: /tall grass|meet wild Pokémon|Wild Pokémon appear there/,
     progress: /Leads toward the objective|objective is in this place|objective takes place|Mentioned in the current objective|changes which gates are closed|opens it\./,
   };
   for (const c of pool) {

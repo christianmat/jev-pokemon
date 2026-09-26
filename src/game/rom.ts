@@ -79,6 +79,16 @@ export class Rom {
     return idx >= 0 ? this.moves.get(this.tmMoves[idx]) ?? null : null;
   }
 
+  /** Levels of the wild Pokémon met on land in this map (WildDataPointers: grass rate, then 10 level/species pairs), or null if none. */
+  wildLevels(mapId: number): { min: number; max: number } | null {
+    const a = sym('WildDataPointers') + mapId * 2;
+    const p = this.b[a] | (this.b[a + 1] << 8);
+    const f = Math.floor(sym('WildDataPointers') / 0x4000) * 0x4000 + (p - 0x4000);
+    if (!this.b[f]) return null;
+    const lv = Array.from({ length: 10 }, (_, i) => this.b[f + 1 + i * 2]);
+    return { min: Math.min(...lv), max: Math.max(...lv) };
+  }
+
   /** Tiles that warp as soon as you step on them in this tileset (warp tiles + door tiles). */
   stepWarpTiles(tileset: number): Set<number> {
     const out = new Set<number>();
