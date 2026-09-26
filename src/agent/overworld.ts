@@ -685,6 +685,9 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
         sw,
         // like the building switches: the closed way and what opens it (a visible floor switch)
         mem.gatedRoute && freeSw.length ? 'The way to the objective is closed by a gate right now; a boulder resting on a floor switch opens it.' : '',
+        // closer to the switch without stranding the boulder: toward the objective (same idea as "Pressing it leads toward the objective")
+        mem.gatedRoute && freeSw.length && !feature && pushable.length > 0 && !lost && near(tx, ty) < near(b.x, b.y) ? 'Leads toward the objective: brings the boulder closer to the floor switch.' : '',
+        feature?.kind === 'switch' && mem.gatedRoute ? 'Leads toward the objective: puts the boulder on the floor switch.' : '',
         'Boulders go back to their starting spots when you leave this area.',
       ].filter(Boolean).join(' ');
       add(`Push boulder at (${b.x},${b.y}) ${d}`, facts, { kind: 'push', x: b.x, y: b.y, dir: d }, path);
