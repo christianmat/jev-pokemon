@@ -239,7 +239,14 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const k = `${gs.mapName}:sign${sg.x},${sg.y}`;
     const said = mem.npcText[k];
     if (gs.mapName === 'CELADON_MART_ROOF' && sg.y <= 2 && sg.x >= 10 && sg.x <= 12) add(`Use the vending machine at (${sg.x},${sg.y})`, `A drink vending machine (FRESH WATER ¥200, SODA POP ¥300, LEMONADE ¥350).${said ? ` Last time: "${clip(said)}".` : ''}`, { kind: 'sign', x: sg.x, y: sg.y }, path);
-    else if (/ELEVATOR/.test(gs.mapName)) add(`Use the elevator panel at (${sg.x},${sg.y})`, `The elevator's floor-select panel.${said ? ` Last time it said: "${clip(said)}".` : ''}`, { kind: 'sign', x: sg.x, y: sg.y }, path);
+    else if (/ELEVATOR/.test(gs.mapName)) {
+      // which floors it serves, and how far each is from the objective
+      const floors = [...rom.maps.values()].filter((mm) => mm.warps.some((w) => w.destMap === gs.mapId)).map((mm) => {
+        const h = Math.min(Infinity, ...rg.regionsOf(mm.id).map((r) => dist.get(r) ?? Infinity));
+        return `${mm.name.replace(/^.*_/, '')}${isFinite(h) ? ` (${objMaps.includes(mm.id) ? 0 : h} areas from the objective)` : ''}`;
+      });
+      add(`Use the elevator panel at (${sg.x},${sg.y})`, `The elevator's floor-select panel: choose which floor the doors lead to. Floors: ${floors.join(', ')}.${said ? ` Last time it said: "${clip(said)}".` : ''}`, { kind: 'sign', x: sg.x, y: sg.y }, path);
+    }
     else add(`Read sign at (${sg.x},${sg.y})`, said ? `A sign. It says: "${said.slice(0, 300)}".` : 'A sign, not yet read.', { kind: 'sign', x: sg.x, y: sg.y }, path);
   }
 
