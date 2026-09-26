@@ -89,7 +89,10 @@ async function decideBattle(ctx: Ctx) {
       continue;
     }
     const effNote = mv.power ? `${effWord(eff)} against ${b.enemy.types.join('/')}. ${stab ? 'Same-type bonus. ' : ''}` : ''; // type matchups only matter for damaging moves
-    opts[key] = mv.pp === 0 ? `${mv.name}: 0 PP left, unusable.` : `${mv.name}: ${mv.type} move, power ${mv.power}, accuracy ${mv.accuracy}%, ${mv.pp} PP left. ${effNote}${dmg}`;
+    // stat stages in play (e.g. the enemy used MINIMIZE / DOUBLE TEAM, or SAND-ATTACK lowered our accuracy)
+    const hit = hitChance(ctx, mv.accuracy);
+    const hitNote = hit !== undefined && hit !== mv.accuracy ? ` Hit chance right now about ${hit}% (${hitWhy(ctx)}).` : '';
+    opts[key] = mv.pp === 0 ? `${mv.name}: 0 PP left, unusable.` : `${mv.name}: ${mv.type} move, power ${mv.power}, accuracy ${mv.accuracy}%, ${mv.pp} PP left.${hitNote} ${effNote}${dmg}`;
     actions[key] = () => { if (!select(ctx, 'FIGHT')) return; if (cursorTo(ctx, mv.name)) confirmA(ctx); else tap(ctx, 'B', 20); };
   }
 
@@ -248,4 +251,18 @@ function hmPathFact(ctx: Ctx, nickname: string): string {
   const t = l.afterEvolving.find((x) => x.startsWith(`in the party: ${nickname} (`));
   if (!t) return '';
   return ` ${t.replace(/^in the party: [^)]*\) /, '')} (the objective needs a team Pokémon that knows ${need}). Every Pokémon that takes part in a battle gets a share of its experience.`;
+}
+
+/** Gen 1 stat-stage ratios (stage 1..13, 7 = normal), from StatModifierRatios. */
+const STAGE: [number, number][] = [[25, 100], [28, 100], [33, 100], [40, 100], [50, 100], [66, 100], [1, 1], [15, 10], [2, 1], [25, 10], [3, 1], [35, 10], [4, 1]];
+function hitChance(ctx: Ctx, accuracy: number): number | undefined {
+  if (!accuracy) return undefined;
+  const acc = ctx.gs.u8('wPlayerMonAccuracyMod'), eva = ctx.gs.u8('wEnemyMonEvasionMod');
+  if (acc < 1 || acc > 13 || eva < 1 || eva > 13 || (acc === 7 && eva === 7)) return undefined;
+  const [an, ad] = STAGE[acc - 1], [en, ed] = STAGE[14 - eva - 1];
+  return Math.max(1, Math.min(100, Math.round(accuracy * (an / ad) * (en / ed))));
+}
+function hitWhy(ctx: Ctx): string {
+  const acc = ctx.gs.u8('wPlayerMonAccuracyMod') - 7, eva = ctx.gs.u8('wEnemyMonEvasionMod') - 7;
+  return [eva ? `enemy evasion ${eva > 0 ? '+' : ''}${eva}` : '', acc ? `your accuracy ${acc > 0 ? '+' : ''}${acc}` : ''].filter(Boolean).join(', ');
 }
