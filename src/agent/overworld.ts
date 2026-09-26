@@ -707,7 +707,7 @@ export async function execute(ctx: Ctx, c: Candidate, agent: Agent): Promise<Wal
       return;
     }
     case 'hidden': {
-      if (/^Press the switch/.test(c.key)) ctx.mem.switchPressedOn = gs.mapName;
+      if (/^Press the switch/.test(c.key)) { ctx.mem.switchPressedOn = gs.mapName; ctx.mem.switchFact = (c.desc.match(/(?:Pressing it|After pressing it)[^()]*(?:\([^)]*\))?[^.]*\.|Switches in this building[^.]*\./) ?? [''])[0]; }
       if (/^Use the PC/.test(c.key)) ctx.mem.pcSession = { steps: 0, sig: '' };
       ctx.mem.lastInteraction = `${gs.mapName}:hidden${t.x},${t.y}`;
       ctx.mem.currentTalk = [];

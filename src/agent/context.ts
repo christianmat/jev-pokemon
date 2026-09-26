@@ -51,6 +51,8 @@ export interface Memory {
   trapBag?: string[];
   /** a switch was pressed on this map (evaluated at the next look) */
   switchPressedOn?: string;
+  /** the switch option's fact about what pressing does (shown on the YES/NO prompt) */
+  switchFact?: string;
   /** per map: switch presses after which the way was still closed */
   switchNoEffect?: Record<string, number>;
   /** whole-team losses by map: how many, and the team (species + levels) at the last one */

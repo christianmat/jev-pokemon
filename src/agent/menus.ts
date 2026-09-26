@@ -294,7 +294,10 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     }
     return 'Picking it RELEASES it: it is gone for good.';
   };
-  for (const o of opts) criteria[o.text] = `Menu option "${o.text}". ${pcListNote(o.text)} ${MENU_FACTS[o.text] ?? ''} ${floorFact(o.text)} ${pcFact(o.text)} ${itemRule(o.text)} ${extraFacts(o.text) || boxFacts(o.text) || partyFacts(o.text)} ${price(o.text)}`.replace(/\s+/g, ' ').trim();
+  // a switch's "Press it?" prompt: what YES / NO do (from the switch option that led here)
+  const switchPrompt = /Press it\?/.test(screenText) && !!ctx.mem.switchPressedOn;
+  const switchFacts = (label: string) => !switchPrompt ? '' : label === 'YES' ? `Presses the switch: all gates in this building flip. ${ctx.mem.switchFact ?? ''}` : label === 'NO' ? 'Leaves the switch and the gates as they are.' : '';
+  for (const o of opts) criteria[o.text] = `Menu option "${o.text}". ${pcListNote(o.text)} ${MENU_FACTS[o.text] ?? ''} ${floorFact(o.text)} ${pcFact(o.text)} ${itemRule(o.text)} ${extraFacts(o.text) || boxFacts(o.text) || partyFacts(o.text)} ${price(o.text)} ${switchFacts(o.text)}`.replace(/\s+/g, ' ').trim();
   // Mechanics Jev can always use: scroll a list that has more entries, and back out of any menu.
   const MORE = 'See more items (scroll down)', CLOSE = 'Close this menu';
   // elevator: where the doors lead right now (the game's live warp table)
