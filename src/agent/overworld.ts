@@ -1066,6 +1066,8 @@ const MART_MAPS = /_MART$|^INDIGO_PLATEAU_LOBBY$/;
 const E4_ROOMS = /^(LORELEIS|BRUNOS|AGATHAS|LANCES|CHAMPIONS)_ROOM$/;
 
 const FOCUS_TTL = 30;
+// 'explore' has no finish line of its own (unlike heal / shop / a catch): re-ask sooner
+const EXPLORE_TTL = 10;
 let lastMapWasMart = false;
 const MAX_REPEATS_NO_PROGRESS = +(process.env.MAX_REPEATS_NO_PROGRESS ?? 5);
 
@@ -1108,7 +1110,7 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   if (done && ctx.mem.intent?.value === 'team') { ctx.mem.teamSig = teamSignature(ctx); ctx.mem.teamAt = Date.now(); }
   if (done && ctx.mem.intent?.value === 'shop') { ctx.mem.shopMoney = gs.money; ctx.mem.shopAt = Date.now(); }
   if (done) { ctx.mem.shopDone = false; ctx.mem.pcDone = false; }
-  if (!done && ctx.mem.intent?.key === key && (ctx.mem.intent.age = (ctx.mem.intent.age ?? 0) + 1) <= FOCUS_TTL) return ctx.mem.intent.value;
+  if (!done && ctx.mem.intent?.key === key && (ctx.mem.intent.age = (ctx.mem.intent.age ?? 0) + 1) <= (ctx.mem.intent.value === 'explore' ? EXPLORE_TTL : FOCUS_TTL)) return ctx.mem.intent.value;
   const balls = gs.bag().filter((i) => /BALL$/.test(i.name)).reduce((a, i) => a + i.qty, 0);
   const criteria = { ...INTENTS };
   const weakNote = weakTeamNote(ctx);
