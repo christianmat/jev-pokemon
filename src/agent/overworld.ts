@@ -5,7 +5,7 @@ import { buildGrid, findPath, DIRS, type Dir, type Grid, type Step } from '../ga
 import { sym, mapName } from '../game/symbols.js';
 import gen from '../data/generated.json' with { type: 'json' };
 import { currentMilestone, missingNeed } from '../knowledge/milestones.js';
-import { useFieldMove, useItem, slotWithMove, closeMenus } from './field.js';
+import { useFieldMove, useItem, tossItem, slotWithMove, closeMenus } from './field.js';
 import { resetMenuRepeats } from './menus.js';
 import { capabilities, fieldMoveLearners } from './context.js';
 import { RegionGraph, HOLES, SWITCH_GATES, SWITCH_EVENT, switchDistances } from '../game/regions.js';
@@ -26,6 +26,7 @@ type Target =
   | { kind: 'strength' }
   | { kind: 'push'; x: number; y: number; dir: Dir }
   | { kind: 'item'; name: string }
+  | { kind: 'toss'; name: string }
   | { kind: 'exit'; dir: Dir; dest: number }
   | { kind: 'npc'; index: number; x: number; y: number; sprite: string }
   | { kind: 'sign'; x: number; y: number }
@@ -402,10 +403,12 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const OBJECTS: Record<string, string> = { POKE_BALL: 'a Poké Ball object', FOSSIL: 'a fossil lying on the ground', BOULDER: 'a boulder', POKEDEX: 'a Pokédex on a table', CLIPBOARD: 'a clipboard', PAPER: 'a piece of paper', OLD_AMBER: 'an amber stone', SNORLAX: 'a sleeping Snorlax' };
     const who = obj?.trainerClass ?? spriteName;
     const kind = obj?.item != null ? `an item ball (${rom.items.get(obj.item) ?? 'item'})` : OBJECTS[spriteName] ?? (obj?.trainer ? `a trainer (${who})` : `a person (${spriteName})`);
+    const ballName = obj?.item != null ? rom.items.get(obj.item) : undefined;
+    const bagFullNote = ballName && gs.bag().length >= 20 && !gs.bag().some((i) => i.name === ballName) ? ' The bag is full (20 of 20 item slots): picking it up fails until a slot is freed (toss, sell or store an item).' : '';
     // named people from the objective text (e.g. MR_FUJI ~ "Mr. Fuji", GIOVANNI, BILL)
     const letters = (t: string) => t.toUpperCase().replace(/[^A-Z]/g, '');
     const inGoal = spriteName.length > 3 && !/^(ROCKET|GIRL|BOY|GUARD|NURSE|CLERK|SUPER_NERD|YOUNGSTER|LASS)$/.test(spriteName) && letters(m?.goal ?? '').includes(letters(spriteName)) ? ' Mentioned in the current objective.' : '';
-    const facts = `${kind} at (${sp.x},${sp.y}).${inGoal}${said ? ` Last time they said: "${clip(said)}".` : ' Not yet talked to.'}${spriteName === 'NURSE' ? ' Heals the whole party.' : ''}${spriteName === 'CLERK' ? ' Shop clerk: buy items.' : ''}`;
+    const facts = `${kind} at (${sp.x},${sp.y}).${bagFullNote}${inGoal}${said ? ` Last time they said: "${clip(said)}".` : ' Not yet talked to.'}${spriteName === 'NURSE' ? ' Heals the whole party.' : ''}${spriteName === 'CLERK' ? ' Shop clerk: buy items.' : ''}`;
     const label = obj?.item != null ? `Pick up item ball at (${sp.x},${sp.y})` : OBJECTS[spriteName] ? `Examine the ${spriteName.toLowerCase().replace(/_/g, ' ')} at (${sp.x},${sp.y})` : `Talk to ${obj?.trainer ? who : spriteName} at (${sp.x},${sp.y})`;
     add(label, blockers.has(sp.index) ? `${facts} ${blockers.get(sp.index)}` : facts, { kind: 'npc', index: sp.index, x: sp.x, y: sp.y, sprite: spriteName }, path);
   }
@@ -589,6 +592,13 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     if (unused >= 3) continue;
     add(`Use ${it.name} from the bag`, `${desc}${unused ? ` Opened ${unused} time(s) before and closed without using it.` : ''}`, { kind: 'item', name: it.name }, []);
   }
+  // a full bag: items on the ground can't be picked up; any non-key item can be thrown away to free a slot
+  if (gs.bag().length >= 20) {
+    for (const it of gs.bag()) {
+      if (rom.isKeyItem(it.id)) continue;
+      add(`Toss ${it.name} from the bag`, `Throws it away for good (${it.qty} in the bag) to free a bag slot. The bag is full (20 of 20 item slots), so items on the ground can't be picked up.`, { kind: 'toss', name: it.name }, []);
+    }
+  }
 
   // Tall grass (wild encounters: train / catch)
   const gp = findPath(g, px, py, (x, y) => g.grass(x, y), { blocked, maxNodes: 8000 });
@@ -738,6 +748,10 @@ export async function execute(ctx: Ctx, c: Candidate, agent: Agent): Promise<Wal
       ctx.mem.currentTalk = [];
       face(ctx, t.x, t.y);
       tap(ctx, 'A', 20);
+      return;
+    }
+    case 'toss': {
+      tossItem(ctx, t.name);
       return;
     }
     case 'cut': {

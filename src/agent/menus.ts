@@ -38,8 +38,12 @@ export function findLabel(ctx: Ctx, text: string): Label | null {
   const want = text.toUpperCase();
   const hits: Label[] = [];
   for (let y = 0; y < s.rows.length; y++) {
-    const row = s.rows[y].toUpperCase();
-    for (let i = row.indexOf(want); i >= 0; i = row.indexOf(want, i + 1)) hits.push({ text, x: i, y });
+    // a tile can decode to several chars (POKé): map string positions back to tile columns
+    const cells = s.cells[y];
+    const col: number[] = [];
+    cells.forEach((c, x) => { for (let k = 0; k < c.length; k++) col.push(x); });
+    const row = cells.join('').toUpperCase();
+    for (let i = row.indexOf(want); i >= 0; i = row.indexOf(want, i + 1)) hits.push({ text, x: col[i] ?? i, y });
   }
   if (!hits.length) return null;
   const c = s.cursor ?? { x: 0, y: 17 };

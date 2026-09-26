@@ -180,6 +180,13 @@ export class Rom {
     return out;
   }
 
+  /** Key items can't be tossed or sold (KeyItemFlags; HMs count as key items, TMs don't). */
+  isKeyItem(id: number): boolean {
+    if (id >= 0xc4 && id <= 0xc8) return true; // HM01-HM05
+    if (id >= 0xc9) return false; // TMs
+    return !!(this.b[sym('KeyItemFlags') + ((id - 1) >> 3)] & (1 << ((id - 1) & 7)));
+  }
+
   /** Can this species learn the TM/HM item? (bit n of the tmhm flags = machine n+1) */
   canLearnMachine(speciesId: number, itemId: number): boolean {
     const idx = itemId >= 0xc9 ? itemId - 0xc9 : itemId >= 0xc4 ? 50 + itemId - 0xc4 : -1;
