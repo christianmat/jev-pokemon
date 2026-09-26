@@ -77,7 +77,7 @@ export interface Step { dir: Dir; x: number; y: number; jump?: boolean; spin?: b
 export function findPath(
   g: Grid, sx: number, sy: number,
   goal: (x: number, y: number) => boolean,
-  opts: { blocked?: Set<string>; allowExit?: (x: number, y: number) => boolean; grassCost?: number; surf?: boolean; maxNodes?: number; spinners?: Map<string, { x: number; y: number }> } = {},
+  opts: { blocked?: Set<string>; allowExit?: (x: number, y: number) => boolean; grassCost?: number; surf?: boolean; resurf?: boolean; maxNodes?: number; spinners?: Map<string, { x: number; y: number }> } = {},
 ): Step[] | null {
   const key = (x: number, y: number) => `${x},${y}`;
   const spin_ = opts.spinners ?? g.spinners;
@@ -108,7 +108,7 @@ export function findPath(
         if (!g.walkable(nx, ny)) continue;
       } else {
         // surfing: stepping onto land ends the surf, and land -> water needs SURF again, so never plan it
-        if (opts.surf && g.water(nx, ny) && !g.water(cur.x, cur.y)) continue;
+        if (opts.surf && !opts.resurf && g.water(nx, ny) && !g.water(cur.x, cur.y)) continue;
         const ok = g.walkable(nx, ny) || (opts.surf && g.water(nx, ny));
         if (!ok || opts.blocked?.has(nk0)) {
           if (!goal(nx, ny) || !g.walkable(nx, ny)) continue; // allow stepping onto goal only if walkable

@@ -303,6 +303,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     out.push({ key, target, path, desc: `${desc} ${path.length} steps away.${n ? ` Chosen ${n} time(s) already on this visit.` : ''}${blockedNote}` });
   };
 
+  // exits that can't be reached on foot right now (SURF options report which of these they open up)
+  const offFoot: { x: number; y: number; dest: number; regions: string[] }[] = [];
   // Warps (dedupe adjacent warps with the same destination)
   const seenWarp: { dest: number; land: Set<string>; c: Candidate }[] = [];
   const blockers = new Map<number, string>(); // sprite index -> fact
@@ -334,6 +336,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const path = px === w.x && py === w.y ? [] : findPath(g, px, py, (x, y) => x === w.x && y === w.y, { blocked: blockedExceptThis, surf });
     // exit only unreachable because a person stands in the way → record that as a plain fact on that person
     if (!path) {
+      if (!surf && destRegions.length) offFoot.push({ x: w.x, y: w.y, dest, regions: destRegions });
       const free = new Set(warpSquares); free.delete(`${w.x},${w.y}`);
       const open = findPath(g, px, py, (x, y) => x === w.x && y === w.y, { blocked: free, surf });
       // Which single person, if they weren't standing there, would open the way? (test each one on the route)
@@ -542,7 +545,15 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       const path = goal(px, py) ? [] : findPath(g, px, py, goal, { blocked, maxNodes: 6000 });
       if (!path) continue;
       seenRegions.add(r);
-      add(`SURF onto the water at (${x},${y})`, `Start surfing on this water. ${routeFacts(gs.mapId, [r])}`, { kind: 'surf', x, y }, path);
+      // exits that can't be reached on foot but can from this water
+      const opens = offFoot.filter((e) => {
+        const b = new Set(blocked); b.delete(`${e.x},${e.y}`); // the exit square itself is the goal
+        return findPath(g, x, y, (ex, ey) => ex === e.x && ey === e.y, { blocked: b, surf: true, resurf: true, maxNodes: 8000 });
+      });
+      const names = [...new Set(opens.map((e) => mapName(e.dest)))];
+      const opensRegions = opens.flatMap((e) => e.regions);
+      const opensNote = names.length ? ` From this water you can reach exits not reachable on foot: ${names.join(', ')}. ${routeFacts(opens[0].dest, opensRegions)}${svc(opensRegions)}` : ` ${routeFacts(gs.mapId, [r])}`;
+      add(`SURF onto the water at (${x},${y})`, `Start surfing on this water.${opensNote}`, { kind: 'surf', x, y }, path);
     }
   }
   const boulders = gs.sprites().filter((s) => !s.hidden && SPRITES[s.picture] === 'BOULDER');
