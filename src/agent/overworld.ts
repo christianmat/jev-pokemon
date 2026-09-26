@@ -630,7 +630,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       const path = sx === px && sy === py ? [] : findPath(g, px, py, (x, y) => x === sx && y === sy, { blocked: standBlocked, noEnter, maxNodes: 6000 });
       // plain facts about the result of this push (switches/holes are visible floor features in the game)
       const feature = FLOOR_FEATURES[gs.mapName]?.find((f) => f.x === tx && f.y === ty);
-      const others = new Set([...blocked].filter((k) => k !== `${b.x},${b.y}`));
+      // edge exit mats can be stood on to push (see edgeMats)
+      const others = new Set([...blocked].filter((k) => k !== `${b.x},${b.y}` && !edgeMats.has(k)));
       const pushable = (Object.keys(DIRS) as Dir[]).filter((d2) => {
         const [ex, ey] = DIRS[d2];
         const k1 = `${tx - ex},${ty - ey}`, k2 = `${tx + ex},${ty + ey}`;
