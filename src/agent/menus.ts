@@ -203,12 +203,15 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   }
   // the price is the first ¥ amount after the item's name (other text can sit in between, e.g. a half-hidden QUIT)
   const price = (label: string) => {
+    // the SELL confirmation ("I can pay you ¥X for that.")
+    const pay = screenText.match(/I can pay you[^<]*<ED>(\d+)/);
+    if (pay && (label === 'YES' || label === 'NO')) return label === 'YES' ? `Sells it for ¥${pay[1]}.` : "Doesn't sell it.";
     const i = screenText.indexOf(label);
     if (i < 0 || !/BUY/.test(screenText) || /^(BUY|SELL|QUIT)$/.test(label)) return '';
     const r = screenText.slice(i + label.length).match(/^[^<]{0,40}?<ED>(\d+)/);
     if (!r) return '';
     // a full bag can't take a new kind of item (more of one already in the bag still fits)
-    const full = ctx.gs.bag().length >= 20 && !ctx.gs.bag().some((i) => i.name === label);
+    const full = ctx.gs.bag().length >= 20 && !/^(YES|NO)$/.test(label) && !ctx.gs.bag().some((i) => i.name === label);
     return `Costs ¥${r[1]}.${full ? ' The bag is full (20 of 20 item slots): a new kind of item can\'t be bought until a slot is freed.' : ''}`;
   };
   const inBattle = ctx.gs.inBattle !== 0;
