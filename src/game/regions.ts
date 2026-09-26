@@ -16,7 +16,7 @@ export interface StaticGrid { w: number; h: number; walk: (x: number, y: number)
 export interface Caps { cut: boolean; surf: boolean }
 const WATER_TILESETS = new Set([0, 3, 5, 7, 13, 14, 17, 22, 23]);
 
-export function staticGrid(rom: Rom, md: MapData, caps: Caps = { cut: false, surf: false }): StaticGrid {
+export function staticGrid(rom: Rom, md: MapData, caps: Caps = { cut: false, surf: false }, blockOv?: Map<number, number>): StaticGrid {
   const r = rom.b;
   const ts = sym('Tilesets') + md.tileset * 12;
   const tsBank = r[ts];
@@ -27,7 +27,8 @@ export function staticGrid(rom: Rom, md: MapData, caps: Caps = { cut: false, sur
   const W = md.width, H = md.height;
   const tile = (x: number, y: number) => {
     if (x < 0 || y < 0 || x >= W * 2 || y >= H * 2) return -1;
-    const b = r[blocks + (y >> 1) * W + (x >> 1)];
+    const bi = (y >> 1) * W + (x >> 1);
+    const b = blockOv?.get(bi) ?? r[blocks + bi];
     return r[blockset + b * 16 + ((y & 1) * 2 + 1) * 4 + (x & 1) * 2];
   };
   // elevation tile pairs (caves/forest): can't step between these two tiles in either direction
@@ -57,11 +58,41 @@ export const HOLES: { from: string; x: number; y: number; to: string; tx: number
   { from: 'POKEMON_MANSION_3F', x: 19, y: 14, to: 'POKEMON_MANSION_2F', tx: 18, ty: 14 },
 ];
 
+/** Pokémon Mansion: blocks the map scripts set from EVENT_MANSION_SWITCH_ON (by, bx, block when OFF, block when ON);
+ *  $0E is floor, $2D/$54/$5F are gates. From pret/pokered scripts/PokemonMansion*.asm. */
+export const SWITCH_GATES: { map: string; blocks: [number, number, number, number][] }[] = [
+  { map: 'POKEMON_MANSION_1F', blocks: [[6, 12, 0x0e, 0x2d], [3, 8, 0x2d, 0x0e], [8, 10, 0x2d, 0x0e], [13, 13, 0x2d, 0x0e]] },
+  { map: 'POKEMON_MANSION_2F', blocks: [[2, 4, 0x0e, 0x5f], [4, 9, 0x54, 0x0e], [11, 3, 0x5f, 0x0e]] },
+  { map: 'POKEMON_MANSION_3F', blocks: [[2, 7, 0x0e, 0x5f], [5, 7, 0x5f, 0x0e]] },
+  { map: 'POKEMON_MANSION_B1F', blocks: [[8, 13, 0x0e, 0x2d], [11, 6, 0x0e, 0x5f], [3, 4, 0x5f, 0x0e], [8, 8, 0x54, 0x0e]] },
+];
+export const SWITCH_EVENT = 'EVENT_MANSION_SWITCH_ON';
+
 export class RegionGraph {
   /** region id per map square: key `${map}` -> Int32Array (w*h), -1 = not walkable */
   private comp = new Map<number, { w: number; h: number; ids: Int32Array }>();
   private out = new Map<string, Set<string>>(); // region -> regions (directed)
   private grids = new Map<number, StaticGrid>();
+
+  /** Mansion switch position (gate blocks); undefined = the maps' default blocks */
+  private switchOn: boolean | undefined;
+  /** Set the switch position; relabels only when it changed. Returns true if it changed. */
+  setSwitch(on: boolean) {
+    if (this.switchOn === on) return false;
+    this.switchOn = on;
+    for (const gt of SWITCH_GATES) { const md = [...this.rom.maps.values()].find((m) => m.name === gt.map); if (md) this.grids.delete(md.id); }
+    this.extraKey = '';
+    this.out.clear(); this.stepOff.clear();
+    for (const md of this.rom.maps.values()) this.label(md);
+    for (const md of this.rom.maps.values()) this.link(md);
+    return true;
+  }
+  private blockOverrides(md: MapData): Map<number, number> | undefined {
+    if (this.switchOn === undefined) return undefined;
+    const gt = SWITCH_GATES.find((x) => x.map === md.name);
+    if (!gt) return undefined;
+    return new Map(gt.blocks.map(([by, bx, off, on]) => [by * md.width + bx, this.switchOn ? on : off]));
+  }
 
   constructor(private rom: Rom, readonly caps: Caps = { cut: false, surf: false }) {
     for (const md of rom.maps.values()) this.label(md);
@@ -102,7 +133,7 @@ export class RegionGraph {
     let g: StaticGrid;
     const cached = this.grids.get(md.id);
     if (cached) g = cached;
-    else { try { g = staticGrid(this.rom, md, this.caps); } catch { return; } this.grids.set(md.id, g); }
+    else { try { g = staticGrid(this.rom, md, this.caps, this.blockOverrides(md)); } catch { return; } this.grids.set(md.id, g); }
     const extra = this.extraBlocked.get(md.id);
     const live = this.liveWalk.get(md.id);
     const walkable = (x: number, y: number) => (live ? live(x, y) : g.walk(x, y));
@@ -237,8 +268,11 @@ export class RegionGraph {
     for (const h of HOLES.filter((hh) => hh.from === md.name)) {
       const to = [...this.rom.maps.values()].find((m) => m.name === h.to);
       const b = to ? this.regionAt(to.id, h.tx, h.ty) : null;
+      if (!b) continue;
       const own = this.regionAt(md.id, h.x, h.y);
-      if (b && own) this.add(own, b);
+      if (own) this.add(own, b);
+      // walking onto the hole from the floor next to it
+      for (const [dx, dy] of Object.values(D)) { const r = this.regionAt(md.id, h.x + dx, h.y + dy); if (r && r !== own) this.add(r, b); }
     }
     for (const c of md.connections) {
       const edge: [number, number][] = [];
@@ -256,6 +290,9 @@ export class RegionGraph {
 
   /** Shortest number of region hops from each region TO any of `targets` (reverse BFS). */
   /** BFS hop counts to the targets; `skip` holds directed edges "a>b" known not to be passable right now. */
+  /** Every directed edge (for combining graphs). */
+  edges(): [string, string][] { const e: [string, string][] = []; for (const [a, bs] of this.out) for (const b of bs) e.push([a, b]); return e; }
+
   distancesTo(targets: string[], skip?: Set<string>): Map<string, number> {
     const rev = new Map<string, string[]>();
     for (const [a, bs] of this.out) for (const b of bs) if (!skip?.has(`${a}>${b}`)) (rev.get(b) ?? rev.set(b, []).get(b)!).push(a);
@@ -267,4 +304,31 @@ export class RegionGraph {
     }
     return d;
   }
+}
+
+/**
+ * Distances to the objective across both Mansion switch positions: layer "A" = the current position (graph `a`),
+ * layer "B" = flipped (graph `b`); pressing a switch (standing below it, facing up) moves between layers.
+ * Returns distances for layer-A regions, and for layer-B regions (after a press).
+ */
+export function switchDistances(rom: Rom, a: RegionGraph, b: RegionGraph, targetsA: string[], targetsB: string[], skip?: Set<string>) {
+  const rev = new Map<string, string[]>();
+  const edge = (x: string, y: string) => (rev.get(y) ?? rev.set(y, []).get(y)!).push(x);
+  for (const [x, y] of a.edges()) if (!skip?.has(`${x}>${y}`)) edge(`A|${x}`, `A|${y}`);
+  for (const [x, y] of b.edges()) edge(`B|${x}`, `B|${y}`);
+  for (const gt of SWITCH_GATES) {
+    const md = [...rom.maps.values()].find((m) => m.name === gt.map);
+    if (!md) continue;
+    for (const h of rom.hidden.get(md.id) ?? []) {
+      if (!/Switches/.test(h.fn)) continue;
+      const ra = a.regionAt(md.id, h.x, h.y + 1), rb = b.regionAt(md.id, h.x, h.y + 1);
+      if (ra && rb) { edge(`A|${ra}`, `B|${rb}`); edge(`B|${rb}`, `A|${ra}`); }
+    }
+  }
+  const d = new Map<string, number>([...targetsA.map((t) => [`A|${t}`, 0] as const), ...targetsB.map((t) => [`B|${t}`, 0] as const)]);
+  const q = [...d.keys()];
+  while (q.length) { const c = q.shift()!; for (const p of rev.get(c) ?? []) if (!d.has(p)) { d.set(p, d.get(c)! + 1); q.push(p); } }
+  const da = new Map<string, number>(), db = new Map<string, number>();
+  for (const [k, v] of d) (k.startsWith('A|') ? da : db).set(k.slice(2), v);
+  return { da, db };
 }

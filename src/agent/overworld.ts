@@ -8,7 +8,7 @@ import { currentMilestone, missingNeed } from '../knowledge/milestones.js';
 import { useFieldMove, useItem, slotWithMove, closeMenus } from './field.js';
 import { resetMenuRepeats } from './menus.js';
 import { capabilities, fieldMoveLearners } from './context.js';
-import { RegionGraph, HOLES } from '../game/regions.js';
+import { RegionGraph, HOLES, SWITCH_GATES, SWITCH_EVENT, switchDistances } from '../game/regions.js';
 /** region graphs for capabilities the party doesn't have yet (to tell whether CUT/SURF is what's missing) */
 const hypoGraphs = new Map<string, RegionGraph>();
 /** per map: walkability when last seen (live), used for maps other than the current one */
@@ -108,6 +108,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     if (mem.switchPressedOn) seenWalk.clear();
     const bits = wk, w = g.w;
     seenWalk.set(gs.mapId, { walk: (x: number, y: number) => x >= 0 && y >= 0 && x < w && bits[y * w + x] === '1', key: String(hashStr(wk)) });
+    // switch-gated buildings (Pokémon Mansion): model every floor's gates from the game's switch flag
+    if (SWITCH_GATES.some((x) => x.map === gs.mapName)) rg.setSwitch(gs.event(SWITCH_EVENT));
     rg.refine(gs.mapId, stay, walk, wk, seenWalk);
   }
   const need = missingNeed(m, gs);
@@ -143,6 +145,20 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   destRegionsByKey.clear();
   let hereRegion = rg.regionAt(gs.mapId, px, py);
   let hereHops = inObjective(gs.mapId, [hereRegion]) ? 0 : (hereRegion ? dist.get(hereRegion) : undefined) ?? Infinity;
+  // in a switch-gated building: routes may need a switch press on the way (both switch positions, presses as steps)
+  switchAfter = null;
+  const gatedHere = SWITCH_GATES.some((x) => x.map === gs.mapName) && objMaps.some((id) => SWITCH_GATES.some((x) => x.map === mapName(id)));
+  if (gatedHere) {
+    const on = gs.event(SWITCH_EVENT);
+    const ck = `switch:${!on}|${capabilities(ctx).cut}|${capabilities(ctx).surf}`;
+    const alt = hypoGraphs.get(ck) ?? hypoGraphs.set(ck, new RegionGraph(rom, capabilities(ctx))).get(ck)!;
+    alt.setSwitch(!on);
+    const bAt = atMap !== undefined && at ? alt.regionAt(atMap, at.x, at.y) : null;
+    const { da, db } = switchDistances(rom, rg, alt, objRegions, bAt ? [bAt] : objMaps.flatMap((id) => alt.regionsOf(id)), skip);
+    dist = da;
+    hereHops = inObjective(gs.mapId, [hereRegion]) ? 0 : (hereRegion ? dist.get(hereRegion) : undefined) ?? Infinity;
+    switchAfter = { alt, db };
+  }
   // blocked only by how this map is right now (gates that switches open and close): give the layout's route anyway
   mem.gatedRoute = false;
   if (!isFinite(hereHops) && objMaps.length) {
@@ -404,8 +420,17 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const said = mem.npcText[k];
     const pcObj = mem.subObjective?.includes('the PC box') && label === 'Use the PC' ? ' Mentioned in the current objective (the PC box).' : '';
     const noEff = mem.switchNoEffect?.[gs.mapName] ?? 0;
+    // pressing it flips every gate: where would the objective be from here then?
+    let flipFact = '';
+    if (label === 'Press the switch' && switchAfter) {
+      const r = switchAfter.alt.regionAt(gs.mapId, h.x, h.y + 1);
+      const after = r ? switchAfter.db.get(r) : undefined;
+      flipFact = after === undefined ? ' After pressing it (all gates flip), the objective would not be reachable from here.'
+        : after < hereHops ? ` Pressing it leads toward the objective: all gates flip, and the objective is then ${after} area(s) away (now ${isFinite(hereHops) ? hereHops : 'not reachable'}).`
+        : ` Pressing it flips all gates; the objective is then ${after} area(s) away (now ${isFinite(hereHops) ? hereHops : 'not reachable'}).`;
+    }
     const sw = label === 'Press the switch' ? ` Switches in this building open some gates and close others.${!mem.gatedRoute ? '' : noEff ? ` The way to the objective is closed by a gate right now, and it was still closed after pressing a switch here ${noEff} time(s) (each press flips the same gates back and forth).` : ' The way to the objective is closed by a gate right now; this switch changes which gates are closed.'}` : '';
-    add(`${label} at (${h.x},${h.y})`, (said ? `Examined before: "${clip(said)}".` : 'Not examined yet.') + pcObj + sw, { kind: 'hidden', x: h.x, y: h.y, face }, path);
+    add(`${label} at (${h.x},${h.y})`, (said ? `Examined before: "${clip(said)}".` : 'Not examined yet.') + pcObj + (flipFact || sw), { kind: 'hidden', x: h.x, y: h.y, face }, path);
   }
 
   // Silph Co. card-key doors: facing the door tile and pressing A opens it if the CARD KEY is in the bag
@@ -877,6 +902,8 @@ function hopsIn(dist: Map<string, number>, regions: string[]) {
   return isFinite(h) ? h : undefined;
 }
 let lastObjectiveReachable = true; // updated by every candidate build
+/** after pressing a switch here: the flipped graph and its distances (switch-gated buildings only) */
+let switchAfter: { alt: RegionGraph; db: Map<string, number> } | null = null;
 let lastServiceDist: { pc: Map<string, number>; mart: Map<string, number> } | null = null;
 /** " Toward the nearest Pokémon Center (N areas)." etc. for a map entered from `via`, when closer than `from` */
 export function serviceFactsFromMap(mapId: number, via: number): string {
