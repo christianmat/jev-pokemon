@@ -581,6 +581,38 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     }
   }
   if (boulders.length && slotWithMove(ctx, 'STRENGTH') >= 0 && gs.badges & 0x08) {
+    // search over (boulder square, where the player can walk) for a push sequence that lands the boulder on a switch
+    const switchReachable = (b: { x: number; y: number }, bx0: number, by0: number, px0: number, py0: number, sws: { x: number; y: number }[]) => {
+      const base = new Set([...blocked].filter((k) => k !== `${b.x},${b.y}` && !edgeMats.has(k)));
+      const free = (x: number, y: number) => g.walkable(x, y) && !base.has(`${x},${y}`);
+      const region = (bx: number, by: number, sx: number, sy: number) => {
+        const seen = new Set([`${sx},${sy}`]), q = [[sx, sy]];
+        while (q.length) {
+          const [x, y] = q.pop()!;
+          for (const [ex, ey] of Object.values(DIRS)) {
+            const nx = x + ex, ny = y + ey, k = `${nx},${ny}`;
+            if (seen.has(k) || (nx === bx && ny === by) || !free(nx, ny)) continue;
+            seen.add(k); q.push([nx, ny]);
+          }
+        }
+        return seen;
+      };
+      const visited = new Set<string>();
+      const queue: [number, number, number, number][] = [[bx0, by0, px0, py0]];
+      while (queue.length && visited.size < 4000) {
+        const [bx, by, sx, sy] = queue.shift()!;
+        if (sws.some((f) => f.x === bx && f.y === by)) return true;
+        const reach = region(bx, by, sx, sy);
+        const sig = `${bx},${by}|${[...reach].sort()[0]}`;
+        if (visited.has(sig)) continue;
+        visited.add(sig);
+        for (const [ex, ey] of Object.values(DIRS)) {
+          if (!reach.has(`${bx - ex},${by - ey}`) || !free(bx + ex, by + ey)) continue;
+          queue.push([bx + ex, by + ey, bx, by]);
+        }
+      }
+      return visited.size >= 4000; // search too big: don't claim it's lost
+    };
     if (!(gs.u8('wStatusFlags1') & 1)) add('Activate STRENGTH', 'Lets the player push boulders on this map.', { kind: 'strength' }, []);
     else for (const b of boulders) for (const d of Object.keys(DIRS) as Dir[]) {
       const [dx, dy] = DIRS[d];
@@ -616,6 +648,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
         return Infinity;
       };
       const dTxt = (v: number) => (isFinite(v) ? `${v} squares` : 'no open floor path');
+      // can any sequence of pushes still bring this boulder onto a free floor switch after this push?
+      const lost = freeSw.length > 0 && feature?.kind !== 'switch' && !switchReachable(b, tx, ty, b.x, b.y, freeSw);
       const sw = freeSw.length && feature?.kind !== 'switch'
         ? `Floor switch${freeSw.length > 1 ? 'es' : ''} on this floor at ${freeSw.map((f) => `(${f.x},${f.y})`).join(', ')}; after this push the boulder is ${dTxt(near(tx, ty))} from the nearest over open floor (now ${dTxt(near(b.x, b.y))}).` : '';
       const facts = [
@@ -623,6 +657,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
         feature ? `That square is a ${feature.kind === 'switch' ? 'floor switch' : 'hole in the floor'}.` : '',
         sw,
         !feature && pushable.length === 0 ? 'After this push the boulder cannot be pushed from any side.' : '',
+        !feature && pushable.length > 0 && lost ? 'After this push no sequence of pushes can bring this boulder onto a floor switch anymore.' : '',
         'Boulders go back to their starting spots when you leave this area.',
       ].filter(Boolean).join(' ');
       add(`Push boulder at (${b.x},${b.y}) ${d}`, facts, { kind: 'push', x: b.x, y: b.y, dir: d }, path);
