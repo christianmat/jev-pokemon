@@ -1119,6 +1119,8 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   criteria.heal = `${INTENTS.heal} Healing at a Pokémon Center is free.${healNote}`;
   // no way to a Pokémon Center from here (e.g. a floor cut off until a puzzle is solved): not offered, like other impossible focuses
   if (noHealHere) delete (criteria as Record<string, string>).heal;
+  // nothing to heal (full HP, no status, full PP): a Pokémon Center visit changes nothing, so it isn't offered
+  if (healed && party.every((p) => p.moves.every((m) => m.pp >= m.maxPp))) delete (criteria as Record<string, string>).heal;
   if (noMartHere) delete (criteria as Record<string, string>).shop;
   // loop rule: the same team lost everything at the same place 2+ times -> 'progress' comes back once the team changes
   // "changed" = a different lineup, or 5+ levels gained in total since that last loss
