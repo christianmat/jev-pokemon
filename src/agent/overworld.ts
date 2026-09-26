@@ -164,6 +164,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     }
   }
   lastObjectiveDist = { dist, rg, objMaps: objMapsNow, atRegion };
+  lastObjectiveReachable = isFinite(hereHops);
   // Getting closer to the objective counts as progress (mazes need back-and-forth without new maps)
   const mi = currentMilestone(gs).index;
   if (isFinite(hereHops) && hereHops < (mem.bestHops[mi] ?? Infinity)) mem.bestHops[mi] = hereHops;
@@ -703,7 +704,7 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   // 'shop' is done once we've left a Mart (bought or not), so it can't send us straight back in
   const leftMart = ctx.mem.intent?.value === 'shop' && !/MART/.test(gs.mapName) && lastMapWasMart;
   lastMapWasMart = false; // one-shot: only the first decision after leaving a Mart
-  const done = (ctx.mem.intent?.value === 'heal' && healed) || leftMart || (ctx.mem.intent?.value === 'shop' && !!ctx.mem.shopDone) || (ctx.mem.intent?.value === 'team' && !!ctx.mem.pcDone);
+  const done = (ctx.mem.intent?.value === 'progress' && !!ctx.mem.fieldMoveNeeded && !lastObjectiveReachable) || (ctx.mem.intent?.value === 'heal' && healed) || leftMart || (ctx.mem.intent?.value === 'shop' && !!ctx.mem.shopDone) || (ctx.mem.intent?.value === 'team' && !!ctx.mem.pcDone);
   if (done && ctx.mem.intent?.value === 'team') { ctx.mem.teamSig = teamSignature(ctx); ctx.mem.teamAt = Date.now(); }
   if (done && ctx.mem.intent?.value === 'shop') { ctx.mem.shopMoney = gs.money; ctx.mem.shopAt = Date.now(); }
   if (done) { ctx.mem.shopDone = false; ctx.mem.pcDone = false; }
@@ -732,6 +733,12 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   if (stuckAt) {
     delete (criteria as Record<string, string>).progress;
     const note = ` (Moving on toward the objective isn't offered right now: all your Pokémon fainted at ${stuckAt[0]} ${stuckAt[1].count} times with exactly this team and these levels. It is offered again once the team changes: a different lineup, a newly learned move, or 5+ levels gained in total since then.)`;
+    for (const k of Object.keys(criteria)) (criteria as Record<string, string>)[k] += note;
+  }
+  // nothing to walk toward: the objective needs a field move no team member knows, and there's no place to go for it
+  else if (ctx.mem.fieldMoveNeeded && !lastObjectiveReachable) {
+    delete (criteria as Record<string, string>).progress;
+    const note = ` (Moving on toward the objective isn't offered right now: it can't be reached without ${ctx.mem.fieldMoveNeeded}, which no team member knows yet.)`;
     for (const k of Object.keys(criteria)) (criteria as Record<string, string>)[k] += note;
   }
   // swapping is only possible with Pokémon in the box
@@ -814,6 +821,7 @@ function hopsIn(dist: Map<string, number>, regions: string[]) {
   const h = Math.min(Infinity, ...regions.map((r) => dist.get(r) ?? Infinity));
   return isFinite(h) ? h : undefined;
 }
+let lastObjectiveReachable = true;
 let lastServiceDist: { pc: Map<string, number>; mart: Map<string, number> } | null = null;
 /** " Toward the nearest Pokémon Center (N areas)." etc. for a map entered from `via`, when closer than `from` */
 export function serviceFactsFromMap(mapId: number, via: number): string {
