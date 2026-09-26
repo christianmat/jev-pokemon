@@ -682,7 +682,7 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   const balls = gs.bag().filter((i) => /BALL$/.test(i.name)).reduce((a, i) => a + i.qty, 0);
   const criteria = { ...INTENTS };
   const weakNote = weakTeamNote(ctx);
-  criteria.catch = `${INTENTS.catch} Team size ${party.length}/6. Poké Balls in bag: ${balls}.${weakNote ? ` ${weakNote}` : ''}`;
+  criteria.catch = `${INTENTS.catch} Team size ${party.length}/6. Poké Balls in bag: ${balls}.${balls === 0 ? ' Catching needs a Poké Ball: with none in the bag, wild Pokémon can only be fought, not caught.' : ''}${weakNote ? ` ${weakNote}` : ''}`;
   const healItems = gs.bag().filter((i) => /POTION|FRESH WATER|SODA POP|LEMONADE|FULL RESTORE|REVIVE/.test(i.name));
   const healNote = ` Healing items in the bag: ${healItems.length ? healItems.map((i) => `${i.name} x${i.qty}`).join(', ') : 'none'} (they heal on the spot, without walking to a Pokémon Center).`;
   criteria.shop = `${INTENTS.shop} Money: ¥${gs.money}. Prices: Poké Ball ¥200, Potion ¥300 (heals 20 HP), Super Potion ¥700 (heals 50 HP), Antidote ¥100.${healNote}`;
