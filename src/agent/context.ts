@@ -31,6 +31,8 @@ export interface Memory {
   shopMoney?: number;
   /** milestone whose prerequisite item was missing at the last check */
   needsMissing?: string;
+  /** a field move no party Pokémon knows that the way to the objective needs (set by the overworld) */
+  fieldMoveNeeded?: 'CUT' | 'SURF';
   /** whole-team losses by map: how many, and the team (species + levels) at the last one */
   losses?: Record<string, { count: number; team: string; moves?: string }>;
   /** last BILL's PC mode chosen (WITHDRAW/DEPOSIT/RELEASE), for list facts */
@@ -91,6 +93,7 @@ export function situation(ctx: Ctx) {
   const party = gs.party();
   const hp = party.reduce((a, p) => a + p.hp, 0), maxHp = party.reduce((a, p) => a + p.maxHp, 0);
   return {
+    fieldMoveNeeded: ctx.mem.fieldMoveNeeded ? fieldMoveFact(ctx, ctx.mem.fieldMoveNeeded) : undefined,
     objective: m ? { goal: m.goal, where: missingNeed(m, gs) ? `${missingNeed(m, gs)!.maps.join(' / ')} first (you don't have ${missingNeed(m, gs)!.what} yet), then ${m.maps.join(' / ')}` : m.maps.join(' / '), typicalOpponentLevel: m.level } : 'Game complete',
     partyHealth: maxHp ? `${Math.round((100 * hp) / maxHp)}% total HP, ${party.filter((p) => p.hp === 0).length} fainted` : 'no Pokémon',
     strongestLevel: Math.max(0, ...party.map((p) => p.level)),
@@ -142,4 +145,21 @@ export function weakTeamNote(ctx: Ctx): string | undefined {
   const weak = party.filter((p) => p.level <= m.level! - 10);
   if (!weak.length) return undefined;
   return `${weak.length} of your ${party.length} Pokémon are 10+ levels below the typical opponent level of the objective (Lv${m.level}): ${weak.map((p) => `${p.nickname} Lv${p.level}`).join(', ')}. Wild Pokémon at higher levels can be caught and swapped in at a Pokémon Center PC to make the team stronger.`;
+}
+
+const HM_FOR = { CUT: { hm: 'HM01', badge: 0x02, badgeName: 'Cascade Badge' }, SURF: { hm: 'HM03', badge: 0x10, badgeName: 'Soul Badge' } } as const;
+/** Which party / PC box Pokémon can learn the HM for a field move (from the ROM's compatibility table). */
+export function fieldMoveLearners(ctx: Ctx, mv: 'CUT' | 'SURF') {
+  const hmId = [...ctx.rom.items.entries()].find(([, n]) => n === HM_FOR[mv].hm)?.[0];
+  const can = (speciesId: number) => hmId !== undefined && ctx.rom.canLearnMachine(speciesId, hmId);
+  return {
+    party: ctx.gs.party().filter((p) => can(p.speciesId)).map((p) => `${p.nickname} (${p.species} Lv${p.level})`),
+    box: ctx.gs.box().filter((b) => can(b.speciesId)).map((b) => `${b.nickname} (${b.species} Lv${b.level})`),
+  };
+}
+function fieldMoveFact(ctx: Ctx, mv: 'CUT' | 'SURF') {
+  const h = HM_FOR[mv];
+  const l = fieldMoveLearners(ctx, mv);
+  const inBag = ctx.gs.bag().some((i) => i.name === h.hm);
+  return `The objective can't be reached from here without ${mv}, and no party Pokémon knows ${mv}. ${h.hm} teaches ${mv} (${inBag ? 'it is in the bag; HMs can be used any number of times' : 'not in the bag'}); using ${mv} outside battle needs the ${h.badgeName}${ctx.gs.badges & h.badge ? ' (you have it)' : ' (you don\'t have it yet)'}. Party Pokémon that can learn ${h.hm}: ${l.party.join(', ') || 'none'}. Pokémon in the PC box that can learn it: ${l.box.join(', ') || 'none'}.`;
 }

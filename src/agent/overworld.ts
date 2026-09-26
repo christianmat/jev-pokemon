@@ -7,7 +7,10 @@ import gen from '../data/generated.json' with { type: 'json' };
 import { currentMilestone, missingNeed } from '../knowledge/milestones.js';
 import { useFieldMove, useItem, slotWithMove, closeMenus } from './field.js';
 import { resetMenuRepeats } from './menus.js';
-import { capabilities } from './context.js';
+import { capabilities, fieldMoveLearners } from './context.js';
+import { RegionGraph } from '../game/regions.js';
+/** region graphs for capabilities the party doesn't have yet (to tell whether CUT/SURF is what's missing) */
+const hypoGraphs = new Map<string, RegionGraph>();
 
 const SPRITES = (gen as any).sprites as Record<string, string>;
 const loggedUnreachable = new Set<string>();
@@ -119,6 +122,22 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   destRegionsByKey.clear();
   const hereRegion = rg.regionAt(gs.mapId, px, py);
   const hereHops = inObjective(gs.mapId, [hereRegion]) ? 0 : (hereRegion ? dist.get(hereRegion) : undefined) ?? Infinity;
+  // unreachable as things are: would a field move nobody knows yet (CUT / SURF) open the way? (a fact for Jev)
+  mem.fieldMoveNeeded = undefined;
+  if (!isFinite(hereHops) && objMaps.length) {
+    const caps = capabilities(ctx);
+    for (const mv of ['CUT', 'SURF'] as const) {
+      const k = mv === 'CUT' ? 'cut' : 'surf';
+      if (caps[k]) continue;
+      const c2 = { ...caps, [k]: true };
+      const ck = `${c2.cut}|${c2.surf}`;
+      const alt = hypoGraphs.get(ck) ?? hypoGraphs.set(ck, new RegionGraph(rom, c2)).get(ck)!;
+      const aAt = atMap !== undefined && at ? alt.regionAt(atMap, at.x, at.y) : null;
+      const d = alt.distancesTo(aAt ? [aAt] : objMaps.flatMap((id) => alt.regionsOf(id)), new Set());
+      const hr = alt.regionAt(gs.mapId, px, py);
+      if (hr && d.has(hr)) { mem.fieldMoveNeeded = mv; break; }
+    }
+  }
   // Getting closer to the objective counts as progress (mazes need back-and-forth without new maps)
   const mi = currentMilestone(gs).index;
   if (isFinite(hereHops) && hereHops < (mem.bestHops[mi] ?? Infinity)) mem.bestHops[mi] = hereHops;
@@ -646,7 +665,7 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   const fainted = party.filter((p) => p.hp === 0).length;
   // a single faint (a weak member in a wild fight) doesn't re-ask; half the team down or low total HP does
   const faintBand = fainted >= Math.ceil(party.length / 2) ? 'many' : 'few';
-  const key = `${hpFrac < 0.25 ? 'low' : 'ok'}|${faintBand}|${party.map((p) => p.species).join(',')}:${Math.floor(party.reduce((a, p) => a + p.level, 0) / 5)}|${gs.badges}|${currentMilestone(gs).index}|${gs.bag().map((i) => i.name).join(',')}`; // money isn't part of it: trainer wins change it all the time (shop has its own money rule)
+  const key = `${hpFrac < 0.25 ? 'low' : 'ok'}|${faintBand}|${party.map((p) => p.species).join(',')}:${Math.floor(party.reduce((a, p) => a + p.level, 0) / 5)}|${gs.badges}|${currentMilestone(gs).index}|${gs.bag().map((i) => i.name).join(',')}|${ctx.mem.fieldMoveNeeded ?? ''}`; // money isn't part of it: trainer wins change it all the time (shop has its own money rule)
   // re-ask Jev every FOCUS_TTL overworld decisions even if nothing changed, so a focus can't trap it
   // a finished focus is re-asked (e.g. 'heal' once everyone is at full HP with no status problems)
   const healed = party.every((p) => p.hp === p.maxHp && p.status === 'OK');
@@ -685,7 +704,8 @@ async function decideIntent(ctx: Ctx): Promise<string> {
   // swapping is only possible with Pokémon in the box
   const box = gs.box();
   // offered only when there's something in the box, and the team/box changed since the PC was last used
-  if (box.length && ctx.mem.teamSig !== teamSignature(ctx)) {
+  const boxLearner = !!ctx.mem.fieldMoveNeeded && fieldMoveLearners(ctx, ctx.mem.fieldMoveNeeded).box.length > 0;
+  if (box.length && (ctx.mem.teamSig !== teamSignature(ctx) || boxLearner)) {
     const lvls = party.map((p) => p.level);
     criteria.team = `${INTENTS.team}${weakNote ? ` ${weakNote}` : ''} In the box: ${box.map((m) => `${m.nickname} (${m.species} Lv${m.level}, ${m.types.join('/')})`).join(', ')}. Team: ${party.map((p) => `${p.nickname} (${p.species} Lv${p.level}, ${p.types.join('/')})`).join(', ')}. Team levels range ${Math.min(...lvls)}-${Math.max(...lvls)}.`;
   } else delete (criteria as Record<string, string>).team;
