@@ -100,6 +100,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   const px = gs.x, py = gs.y;
   // NPCs block, and so do warp tiles (doors/ladders): stepping on one mid-path would warp us away by accident
   const warpSquares = new Set([...(md?.warps ?? []).map((w) => `${w.x},${w.y}`), ...HOLES.filter((h) => h.from === gs.mapName).map((h) => `${h.x},${h.y}`)]);
+  // people and boulders standing somewhere right now (sprites only)
+  const occupied = new Set(gs.sprites().filter((sp) => !sp.hidden).map((sp) => `${sp.x},${sp.y}`));
   const blocked = new Set([...blockedSquares(ctx), ...warpSquares]);
   // the game's boulder rule: the square two ahead must be passable, not stairs ($15), and not across an elevation
   // difference from the square the player pushes from
@@ -323,6 +325,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   const blockers = new Map<number, string>(); // sprite index -> fact
   const lastMap = gs.u8('wLastMap');
   (md?.warps ?? []).forEach((w, wi) => {
+    // someone or a boulder stands on the door square itself: it can't be used right now (a twin door may be free)
+    if (occupied.has(`${w.x},${w.y}`)) return;
     // LAST_MAP warps: resolve from the ROM (which map warps into this door), not from wLastMap
     let destRegions = md ? rg.warpTargets(md, wi) : [];
     // two-tile doorways: if this tile doesn't resolve, use its neighbor's destination (same door)
