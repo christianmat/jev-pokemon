@@ -101,6 +101,10 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   // NPCs block, and so do warp tiles (doors/ladders): stepping on one mid-path would warp us away by accident
   const warpSquares = new Set([...(md?.warps ?? []).map((w) => `${w.x},${w.y}`), ...HOLES.filter((h) => h.from === gs.mapName).map((h) => `${h.x},${h.y}`)]);
   const blocked = new Set([...blockedSquares(ctx), ...warpSquares]);
+  // the game's boulder rule: the square two ahead must be passable, not stairs ($15), and not across an elevation
+  // difference from the square the player pushes from
+  const boulderCanGo = (sx: number, sy: number, tx: number, ty: number) =>
+    g.walkable(tx, ty) && g.tile(tx, ty) !== 0x15 && !g.pairBlocked(g.tile(sx, sy), g.tile(tx, ty));
   const surf = gs.walkState === 2;
   const { m } = currentMilestone(gs);
   // a prerequisite item not in the bag yet: head to where it's found first
@@ -348,7 +352,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       // a boulder in the way: does any single push (to open floor) actually clear that path?
       const pushClears = (sp: { x: number; y: number }) => Object.values(DIRS).some(([dx, dy]) => {
         const tx = sp.x + dx, ty = sp.y + dy, sx = sp.x - dx, sy = sp.y - dy;
-        if (!g.walkable(sx, sy) || !g.walkable(tx, ty) || blocked.has(`${tx},${ty}`) || (tx === px && ty === py)) return false;
+        if (!g.walkable(sx, sy) || !boulderCanGo(sx, sy, tx, ty) || blocked.has(`${tx},${ty}`) || (tx === px && ty === py)) return false;
         // the player has to be able to get behind it
         if (!(sx === px && sy === py) && !findPath(g, px, py, (x, y) => x === sx && y === sy, { blocked, surf, maxNodes: 4000 })) return false;
         const moved = new Set(blocked); moved.delete(`${sp.x},${sp.y}`); moved.delete(`${w.x},${w.y}`); moved.add(`${tx},${ty}`);
@@ -609,7 +613,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
         if (visited.has(sig)) continue;
         visited.add(sig);
         for (const [ex, ey] of Object.values(DIRS)) {
-          if (!reach.has(`${bx - ex},${by - ey}`) || !free(bx + ex, by + ey)) continue;
+          if (!reach.has(`${bx - ex},${by - ey}`) || !free(bx + ex, by + ey) || !boulderCanGo(bx - ex, by - ey, bx + ex, by + ey)) continue;
           queue.push([bx + ex, by + ey, bx, by]);
         }
       }
@@ -619,7 +623,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     else for (const b of boulders) for (const d of Object.keys(DIRS) as Dir[]) {
       const [dx, dy] = DIRS[d];
       const sx = b.x - dx, sy = b.y - dy, tx = b.x + dx, ty = b.y + dy;
-      if (!g.walkable(sx, sy) || !g.walkable(tx, ty) || blocked.has(`${tx},${ty}`)) continue;
+      if (!g.walkable(sx, sy) || !boulderCanGo(sx, sy, tx, ty) || blocked.has(`${tx},${ty}`)) continue;
       // exit mats on the map edge only warp when walking toward the edge: they can be stood on to push
       const standBlocked = new Set(blocked); for (const k of edgeMats.keys()) standBlocked.delete(k);
       const noEnter = (x: number, y: number, dd: Dir) => edgeMats.get(`${x},${y}`)?.includes(dd) ?? false;
@@ -630,7 +634,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       const pushable = (Object.keys(DIRS) as Dir[]).filter((d2) => {
         const [ex, ey] = DIRS[d2];
         const k1 = `${tx - ex},${ty - ey}`, k2 = `${tx + ex},${ty + ey}`;
-        return g.walkable(tx - ex, ty - ey) && g.walkable(tx + ex, ty + ey) && !others.has(k1) && !others.has(k2);
+        return g.walkable(tx - ex, ty - ey) && boulderCanGo(tx - ex, ty - ey, tx + ex, ty + ey) && !others.has(k1) && !others.has(k2);
       });
       // the floor switches are visible on screen: how far this boulder would be from the nearest free one
       const freeSw = (FLOOR_FEATURES[gs.mapName] ?? []).filter((f) => f.kind === 'switch' && !boulders.some((o) => o.x === f.x && o.y === f.y));
@@ -1128,11 +1132,11 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
   }
   // Loop rule: tag options already tried without progress; drop ones repeated too often (until progress resets it)
   const tried = ctx.mem.triedNoProgress;
-  const tk = (c: Candidate) => `${ctx.gs.mapName}:${c.key}`;
+  // pushes are counted per visit (boulders reset when you leave, so a new visit starts fresh)
+  const tk = (c: Candidate) => c.target.kind === 'push' ? `${ctx.gs.mapName}#${ctx.mem.visitedMaps[ctx.gs.mapName] ?? 0}:${c.key}` : `${ctx.gs.mapName}:${c.key}`;
   const towardObjective = (c: Candidate) => /Leads toward the objective|objective is in this place/.test(c.desc);
-  // boulder puzzles reset when you leave: activating STRENGTH and the same pushes are needed again each attempt
-  // (push options carry their own facts), so the repeat rule doesn't apply to them
-  const exempt = (c: Candidate) => c.target.kind === 'strength' || c.target.kind === 'push';
+  // boulder puzzles reset when you leave: activating STRENGTH is needed again each visit, so the repeat rule skips it
+  const exempt = (c: Candidate) => c.target.kind === 'strength';
   let pool = cands.filter((c) => towardObjective(c) || exempt(c) || (tried[tk(c)] ?? 0) < MAX_REPEATS_NO_PROGRESS);
   if (!pool.length) { ctx.mem.triedNoProgress = {}; pool = cands; }
   const criteria: Record<string, string> = {};
@@ -1166,12 +1170,13 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
   ctx.jev.explore = prevExplore;
   const ans = answers.decision as { choice: string; probabilities?: Record<string, number> };
   let key = ans.choice;
-  if ((tried[`${ctx.gs.mapName}:${key}`] ?? 0) >= 3 && ans.probabilities) {
+  const triedN = (k: string) => { const cc = pool.find((x) => x.key === k); return cc ? tried[tk(cc)] ?? 0 : 0; };
+  if (triedN(key) >= 3 && ans.probabilities) {
     const alts = Object.entries(ans.probabilities).filter(([k]) => k !== key);
     const total = alts.reduce((a, [, p]) => a + p + 0.05, 0);
     let r = Math.random() * total;
     for (const [k, p] of alts) { r -= p + 0.05; if (r <= 0) { key = k; break; } }
-    ctx.log('info', `"${ans.choice}" already tried ${tried[`${ctx.gs.mapName}:${ans.choice}`]}x with no change → trying "${key}" instead`);
+    ctx.log('info', `"${ans.choice}" already tried ${triedN(ans.choice)}x with no change → trying "${key}" instead`);
   }
   const c = pool.find((k) => k.key === key)!;
   if (!exempt(c)) tried[tk(c)] = (tried[tk(c)] ?? 0) + 1;
