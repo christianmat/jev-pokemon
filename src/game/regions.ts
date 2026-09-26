@@ -239,7 +239,8 @@ export class RegionGraph {
       for (const src of this.rom.maps.values()) src.warps.forEach((sw) => { if (sw.destMap === md.id && sw.destWarp === wi) land(src.id, w.destWarp); });
       // "back to where you came from" exits that no outside door points at (a building's second exit): the game sends
       // you to the map you came from, at the door it names — i.e. a map that leads into this one
-      if (!res.length) for (const src of this.rom.maps.values()) if (src.id !== md.id && src.warps.some((sw) => sw.destMap === md.id)) land(src.id, w.destWarp);
+      // (only outside maps: ones this map has no door of its own to — its other floors are reached by explicit stairs)
+      if (!res.length) for (const src of this.rom.maps.values()) if (src.id !== md.id && src.warps.some((sw) => sw.destMap === md.id) && !md.warps.some((mw) => mw.destMap === src.id)) land(src.id, w.destWarp);
     }
     return res;
   }
