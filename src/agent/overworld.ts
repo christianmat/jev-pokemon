@@ -31,6 +31,13 @@ interface Candidate { key: string; desc: string; target: Target; path: Step[] }
 const destRegionsByKey = new Map<string, string[]>();
 
 const adj = (x: number, y: number, tx: number, ty: number) => Math.abs(x - tx) + Math.abs(y - ty) === 1;
+/** Silph Co. card-key door tile (the game checks the tile in front of the player on these floors). */
+const cardKeyDoor = (gs: { mapName: string }, g: Grid, x: number, y: number) => {
+  if (!/^SILPH_CO_([2-9]|1[01])F$/.test(gs.mapName)) return false;
+  const t = g.tile(x, y);
+  return t === 0x18 || t === 0x24 || (gs.mapName === 'SILPH_CO_11F' && t === 0x5e);
+};
+const hasCardKey = (gs: Ctx['gs']) => gs.bag().some((i) => i.name === 'CARD KEY');
 
 function blockedSquares(ctx: Ctx, exceptIndex = -1): Set<string> {
   const s = new Set<string>();
@@ -72,8 +79,11 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       if (!sp.hidden && o && o.movement === 0xff && o.item == null) stay.add(`${sp.x},${sp.y}`);
     }
     // live walkability too (doors opened/closed by events differ from the map's static data)
-    let wk = ''; for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) wk += g.walkable(x, y) ? '1' : '0';
-    rg.refine(gs.mapId, stay, (x, y) => g.walkable(x, y), wk);
+    // a locked Silph Co. door counts as passable for routing once the CARD KEY is in the bag (it opens with A)
+    const keyDoor = hasCardKey(gs) ? (x: number, y: number) => cardKeyDoor(gs, g, x, y) : () => false;
+    const walk = (x: number, y: number) => g.walkable(x, y) || keyDoor(x, y);
+    let wk = ''; for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) wk += walk(x, y) ? '1' : '0';
+    rg.refine(gs.mapId, stay, walk, wk);
   }
   const need = missingNeed(m, gs);
   // a prerequisite just arrived: what blocked us before (e.g. guards wanting it) may be open now
@@ -278,6 +288,42 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const k = `${gs.mapName}:hidden${h.x},${h.y}`;
     const said = mem.npcText[k];
     add(`${label} at (${h.x},${h.y})`, said ? `Examined before: "${clip(said)}".` : 'Not examined yet.', { kind: 'hidden', x: h.x, y: h.y, face }, path);
+  }
+
+  // Silph Co. card-key doors: facing the door tile and pressing A opens it if the CARD KEY is in the bag
+  if (/^SILPH_CO_([2-9]|1[01])F$/.test(gs.mapName)) {
+    const doorTile = (x: number, y: number) => cardKeyDoor(gs, g, x, y);
+    const hasKey = hasCardKey(gs);
+    // squares reachable from here right now (doors closed, people ignored)
+    const flood = (sx: number, sy: number) => {
+      const seen = new Set<string>([`${sx},${sy}`]); const q = [[sx, sy]];
+      while (q.length) { const [cx, cy] = q.pop()!; for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) { const nx = cx + dx, ny = cy + dy, k = `${nx},${ny}`; if (!seen.has(k) && g.walkable(nx, ny) && !doorTile(nx, ny)) { seen.add(k); q.push([nx, ny]); } } }
+      return seen;
+    };
+    const reach = flood(px, py);
+    const atHere = at && at.map === gs.mapName ? at : undefined;
+    const best = new Map<string, { x: number; y: number; path: Step[] | null; behind: string }>();
+    for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) {
+      if (!doorTile(x, y)) continue;
+      const goal = (sx: number, sy: number) => adj(sx, sy, x, y) && !doorTile(sx, sy);
+      const path = goal(px, py) ? [] : findPath(g, px, py, goal, { blocked, maxNodes: 4000 });
+      if (!path) continue;
+      // what's on the other side: floor next to the door that can't be reached from here now
+      let behind = '';
+      for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0], [0, 2], [0, -2], [2, 0], [-2, 0]]) {
+        const nx = x + dx, ny = y + dy;
+        if (!g.walkable(nx, ny) || doorTile(nx, ny) || reach.has(`${nx},${ny}`)) continue;
+        const other = flood(nx, ny);
+        behind = atHere && other.has(`${atHere.x},${atHere.y}`) ? ' The objective location is behind this door.' : ' Behind it is an area not reachable from here otherwise.';
+        break;
+      }
+      const k = `${x >> 1},${y >> 1}`;
+      const prev = best.get(k);
+      if (!prev || (prev.path?.length ?? 1e9) > path.length) best.set(k, { x, y, path, behind });
+    }
+    for (const d of best.values()) {
+      add(`Open the locked door at (${d.x},${d.y})`, `A locked Silph Co. door; the CARD KEY opens it (${hasKey ? 'the CARD KEY is in the bag' : 'no CARD KEY in the bag'}).${d.behind}`, { kind: 'hidden', x: d.x, y: d.y, face: null }, d.path);
+    }
   }
 
   // Field moves (only when the party can really use them)
