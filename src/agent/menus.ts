@@ -92,8 +92,9 @@ export function readMenuOptions(ctx: Ctx): Label[] {
   const { topY, topX, max } = ctx.gs.menu();
   const clean = (t: string) => t.replace(/[┌─┐│└┘▶▷▼]/g, ' ').replace(/\s{2,}.*$/, '').trim();
   const opts: Label[] = [];
-  // Try register layout first (step 2, then 1)
-  for (const step of [2, 1]) {
+  // Try register layout first (step 2, then 1) — only when the cursor really is in that column (else text
+  // drawn behind a small box, like a YES/NO over a patterned floor, gets read instead of the options)
+  for (const step of s.cursor.x === topX ? [2, 1] : []) {
     const tmp: Label[] = [];
     for (let i = 0; i <= max && i < 12; i++) {
       const y = topY + i * step;
