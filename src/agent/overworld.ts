@@ -739,6 +739,18 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       if (freeSw.length && !feature && (pushable.length === 0 || (lost && canReachNow(b))) && !opensWay(b, tx, ty)) continue;
       add(`Push boulder at (${b.x},${b.y}) ${d}`, facts, { kind: 'push', x: b.x, y: b.y, dir: d }, path);
     }
+    // when a boulder has pushes that lead toward a switch, its other pushes (away / sideways) aren't offered,
+    // unless they open a new way out; Jev still picks which boulder and which of the toward pushes
+    for (const b of boulders) {
+      const mine = out.filter((c) => c.target.kind === 'push' && c.target.x === b.x && c.target.y === b.y);
+      if (!mine.some((c) => /Leads toward the objective/.test(c.desc))) continue;
+      for (const c of mine) {
+        if (/Leads toward the objective/.test(c.desc) || c.target.kind !== 'push') continue;
+        const [dx, dy] = DIRS[c.target.dir];
+        if (opensWay(b, b.x + dx, b.y + dy)) continue;
+        out.splice(out.indexOf(c), 1);
+      }
+    }
     // no boulder can reach a free switch from where it is now: say so on the exits (leaving resets them)
     const freeAll = (FLOOR_FEATURES[gs.mapName] ?? []).filter((f) => f.kind === 'switch' && !boulders.some((o) => o.x === f.x && o.y === f.y));
     if (movedBoulder && mem.gatedRoute && freeAll.length && !boulders.some((b) => switchReachable(b, b.x, b.y, px, py, freeAll))) {
