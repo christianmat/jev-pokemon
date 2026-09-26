@@ -197,6 +197,10 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     CANCEL: 'Close this menu without doing anything.',
     HEAL: 'Fully heal the whole party for free.',
   };
+  if (ctx.gs.bag().length >= 20) {
+    MENU_FACTS.BUY += ' The bag is full (20 of 20 item slots): only more of an item already in the bag can be bought.';
+    MENU_FACTS.SELL += ' Selling all of one item frees a bag slot.';
+  }
   // the price is the first ¥ amount after the item's name (other text can sit in between, e.g. a half-hidden QUIT)
   const price = (label: string) => {
     const i = screenText.indexOf(label);
