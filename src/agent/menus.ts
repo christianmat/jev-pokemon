@@ -1,5 +1,6 @@
 import type { Ctx } from './context.js';
 import { tap, remember, situation } from './context.js';
+import { hopsFromMap } from './overworld.js';
 
 // Generic screen-reading helpers for menus. They move a cursor to a label that is ON SCREEN;
 // what to pick is always decided elsewhere (by Jev).
@@ -247,7 +248,8 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
     if (!/ELEVATOR/.test(ctx.gs.mapName) || !/^B?\d{1,2}F$/.test(label)) return '';
     const served = [...ctx.rom.maps.values()].filter((m) => m.warps.some((w) => w.destMap === ctx.gs.mapId));
     const m = served.find((mm) => mm.name.endsWith(`_${label}`));
-    return m ? `Sets the elevator doors to lead to ${m.name}.` : '';
+    const h = m ? hopsFromMap(m.id) : undefined;
+    return m ? `Sets the elevator doors to lead to ${m.name}.${h !== undefined ? ` That floor is ${h} area(s) from the objective.` : ''}` : '';
   };
   // in a BILL's PC pick list: say what picking a Pokémon does
   const pcListNote = (label: string) => {

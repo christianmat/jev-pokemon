@@ -81,6 +81,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   const objRegions = atRegion ? [atRegion] : objMaps.flatMap((id) => rg.regionsOf(id));
   const inObjective = (map: number, regions: (string | null)[]) => (atRegion ? regions.includes(atRegion) : objMaps.includes(map));
   const dist = rg.distancesTo(objRegions, skip);
+  lastObjectiveDist = { dist, rg, objMaps };
   destRegionsByKey.clear();
   const hereRegion = rg.regionAt(gs.mapId, px, py);
   const hereHops = inObjective(gs.mapId, [hereRegion]) ? 0 : (hereRegion ? dist.get(hereRegion) : undefined) ?? Infinity;
@@ -656,6 +657,14 @@ function overworldReady(ctx: Ctx): boolean {
   return false;
 }
 let busyWaited = 0;
+let lastObjectiveDist: { dist: Map<string, number>; rg: ReturnType<typeof regionGraph>; objMaps: number[] } | null = null;
+/** Areas from a map to the current objective (from the latest overworld decision), for menus like elevator floors. */
+export function hopsFromMap(mapId: number): number | undefined {
+  if (!lastObjectiveDist) return undefined;
+  if (lastObjectiveDist.objMaps.includes(mapId)) return 0;
+  const h = Math.min(Infinity, ...lastObjectiveDist.rg.regionsOf(mapId).map((r) => lastObjectiveDist!.dist.get(r) ?? Infinity));
+  return isFinite(h) ? h : undefined;
+}
 let pendingItem: { name: string; sig: string } | null = null;
 const itemSig = (ctx: Ctx) => `${ctx.gs.bag().map((i) => i.name + i.qty).join(',')}|${ctx.gs.party().map((p) => p.level + p.moves.map((m) => m.name).join('+') + p.hp + p.status).join(',')}`;
 
