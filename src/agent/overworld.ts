@@ -31,6 +31,17 @@ interface Candidate { key: string; desc: string; target: Target; path: Step[] }
 const destRegionsByKey = new Map<string, string[]>();
 
 const adj = (x: number, y: number, tx: number, ty: number) => Math.abs(x - tx) + Math.abs(y - ty) === 1;
+/** A gym objective without an exact spot: the square in front of the gym leader (from the map's object data). */
+const LEADERS = /^(BROCK|MISTY|LT\.?SURGE|ERIKA|KOGA|SABRINA|BLAINE|GIOVANNI)$/;
+function gymLeaderSpot(rom: Ctx['rom'], maps: string[]) {
+  for (const name of maps) {
+    if (!/_GYM$/.test(name)) continue;
+    const md = [...rom.maps.values()].find((mm) => mm.name === name);
+    const o = md?.objects.find((ob) => ob.trainer && LEADERS.test(ob.trainerClass ?? ''));
+    if (md && o) return { map: name, x: o.x, y: o.y + 1 };
+  }
+  return undefined;
+}
 /** Silph Co. card-key door tile (the game checks the tile in front of the player on these floors). */
 const cardKeyDoor = (gs: { mapName: string }, g: Grid, x: number, y: number) => {
   if (!/^SILPH_CO_([2-9]|1[01])F$/.test(gs.mapName)) return false;
@@ -98,7 +109,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   // exits that stopped us at least twice are left out of route distances until one works again
   const skip = new Set(Object.entries(mem.blockedEdges ?? {}).filter(([, n]) => n >= 2).map(([e]) => e));
   // the objective's area: a specific spot when the milestone gives one (a map can have unconnected parts)
-  const at = need ? need.at : m?.at;
+  const at = need ? need.at : m?.at ?? gymLeaderSpot(rom, m?.maps ?? []);
   const atMap = at ? objMaps.find((id) => mapName(id) === at.map) : undefined;
   const atRegion = atMap !== undefined && at ? rg.regionAt(atMap, at.x, at.y) : null;
   const objRegions = atRegion ? [atRegion] : objMaps.flatMap((id) => rg.regionsOf(id));
@@ -873,7 +884,7 @@ async function runChosen(ctx: Ctx, c: Candidate, agent: Agent, battleInterrupt: 
   // a warp to the same map (teleport pads) doesn't change the map: it worked if we're now off in another area
   const sameMapWarp = tg.kind === 'warp' && (c.target as { dest: number }).dest === mapBefore;
   const arrived = () => ctx.gs.mapId !== mapBefore || (sameMapWarp && regionGraph(ctx).regionAt(mapBefore, ctx.gs.x, ctx.gs.y) !== fromRegion && Math.abs(ctx.gs.x - tg.x!) + Math.abs(ctx.gs.y - tg.y!) > 1);
-  if (arrived()) for (const e of edges) delete bE[e]; // it worked this time
+  if (arrived()) { for (const e of edges) delete bE[e]; delete ctx.mem.blockedExits[`${mapNameBefore}:${c.key}`]; } // it worked this time
   const isExit = (c.target.kind === 'exit' || c.target.kind === 'warp') && c.path.length > 0;
   if (isExit || res === 'interrupted') {
     // settle any dialog/cutscene the attempt caused (keeping what was said), then check whether we got there
