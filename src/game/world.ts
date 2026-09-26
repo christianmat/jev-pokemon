@@ -107,6 +107,8 @@ export function findPath(
         nx += dx; ny += dy; jump = true;
         if (!g.walkable(nx, ny)) continue;
       } else {
+        // surfing: stepping onto land ends the surf, and land -> water needs SURF again, so never plan it
+        if (opts.surf && g.water(nx, ny) && !g.water(cur.x, cur.y)) continue;
         const ok = g.walkable(nx, ny) || (opts.surf && g.water(nx, ny));
         if (!ok || opts.blocked?.has(nk0)) {
           if (!goal(nx, ny) || !g.walkable(nx, ny)) continue; // allow stepping onto goal only if walkable
