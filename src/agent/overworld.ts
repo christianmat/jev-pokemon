@@ -389,7 +389,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const k = `${gs.mapName}:hidden${h.x},${h.y}`;
     const said = mem.npcText[k];
     const pcObj = mem.subObjective?.includes('the PC box') && label === 'Use the PC' ? ' Mentioned in the current objective (the PC box).' : '';
-    const sw = label === 'Press the switch' ? ' Switches in this building open some gates and close others.' : '';
+    const sw = label === 'Press the switch' ? ` Switches in this building open some gates and close others.${mem.gatedRoute ? ' The way to the objective is closed by a gate right now; this switch changes which gates are closed.' : ''}` : '';
     add(`${label} at (${h.x},${h.y})`, (said ? `Examined before: "${clip(said)}".` : 'Not examined yet.') + pcObj + sw, { kind: 'hidden', x: h.x, y: h.y, face }, path);
   }
 
@@ -929,7 +929,7 @@ export async function overworldStep(ctx: Ctx, agent: Agent) {
     team: /Use the PC|Pokémon Center/,
     train: /tall grass/,
     catch: /tall grass/,
-    progress: /Leads toward the objective|objective is in this place|objective takes place|Mentioned in the current objective/,
+    progress: /Leads toward the objective|objective is in this place|objective takes place|Mentioned in the current objective|changes which gates are closed/,
   };
   for (const c of pool) {
     const n = tried[tk(c)] ?? 0;
