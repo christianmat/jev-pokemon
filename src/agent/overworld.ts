@@ -188,6 +188,13 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   }
   // track how long a field-move prerequisite has been unmet
   if (mem.fieldMoveNeeded) mem.subSince ??= Date.now(); else mem.subSince = undefined;
+  // did the last switch press here open the way? (still closed afterwards = it didn't)
+  if (mem.switchPressedOn === gs.mapName) {
+    mem.switchNoEffect ??= {};
+    mem.switchNoEffect[gs.mapName] = mem.gatedRoute ? (mem.switchNoEffect[gs.mapName] ?? 0) + 1 : 0;
+    mem.switchPressedOn = undefined;
+  }
+  if (!mem.gatedRoute && mem.switchNoEffect?.[gs.mapName]) mem.switchNoEffect[gs.mapName] = 0;
   lastObjectiveDist = { dist, rg, objMaps: objMapsNow, atRegion };
   lastObjectiveReachable = isFinite(hereHops);
   // Getting closer to the objective counts as progress (mazes need back-and-forth without new maps)
@@ -389,7 +396,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const k = `${gs.mapName}:hidden${h.x},${h.y}`;
     const said = mem.npcText[k];
     const pcObj = mem.subObjective?.includes('the PC box') && label === 'Use the PC' ? ' Mentioned in the current objective (the PC box).' : '';
-    const sw = label === 'Press the switch' ? ` Switches in this building open some gates and close others.${mem.gatedRoute ? ' The way to the objective is closed by a gate right now; this switch changes which gates are closed.' : ''}` : '';
+    const noEff = mem.switchNoEffect?.[gs.mapName] ?? 0;
+    const sw = label === 'Press the switch' ? ` Switches in this building open some gates and close others.${!mem.gatedRoute ? '' : noEff ? ` The way to the objective is closed by a gate right now, and it was still closed after pressing a switch here ${noEff} time(s) (each press flips the same gates back and forth).` : ' The way to the objective is closed by a gate right now; this switch changes which gates are closed.'}` : '';
     add(`${label} at (${h.x},${h.y})`, (said ? `Examined before: "${clip(said)}".` : 'Not examined yet.') + pcObj + sw, { kind: 'hidden', x: h.x, y: h.y, face }, path);
   }
 
@@ -654,6 +662,7 @@ export async function execute(ctx: Ctx, c: Candidate, agent: Agent): Promise<Wal
       return;
     }
     case 'hidden': {
+      if (/^Press the switch/.test(c.key)) ctx.mem.switchPressedOn = gs.mapName;
       if (/^Use the PC/.test(c.key)) ctx.mem.pcSession = { steps: 0, sig: '' };
       ctx.mem.lastInteraction = `${gs.mapName}:hidden${t.x},${t.y}`;
       ctx.mem.currentTalk = [];

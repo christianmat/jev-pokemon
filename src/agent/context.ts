@@ -49,6 +49,10 @@ export interface Memory {
   trapSquares?: Record<string, string[]>;
   trapSig?: string;
   trapBag?: string[];
+  /** a switch was pressed on this map (evaluated at the next look) */
+  switchPressedOn?: string;
+  /** per map: switch presses after which the way was still closed */
+  switchNoEffect?: Record<string, number>;
   /** whole-team losses by map: how many, and the team (species + levels) at the last one */
   losses?: Record<string, { count: number; team: string; moves?: string }>;
   /** last BILL's PC mode chosen (WITHDRAW/DEPOSIT/RELEASE), for list facts */
