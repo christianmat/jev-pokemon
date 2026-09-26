@@ -106,6 +106,13 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   const boulderCanGo = (sx: number, sy: number, tx: number, ty: number) =>
     g.walkable(tx, ty) && g.tile(tx, ty) !== 0x15 && !g.pairBlocked(g.tile(sx, sy), g.tile(tx, ty));
   const surf = gs.walkState === 2;
+  // a boulder moved from its starting spot goes back when you leave the area: say so on the exits
+  const movedBoulder = gs.sprites().some((sp) => {
+    if (sp.hidden || SPRITES[sp.picture] !== 'BOULDER') return false;
+    const o = md?.objects.find((ob) => ob.index === sp.index);
+    return !!o && (o.x !== sp.x || o.y !== sp.y);
+  });
+  const leaveNote = movedBoulder ? ' Leaving puts the boulders you moved on this floor back at their starting spots.' : '';
   const { m } = currentMilestone(gs);
   // a prerequisite item not in the bag yet: head to where it's found first
   // people who never move stand in corridors like walls: split this map's regions around them
@@ -379,7 +386,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const name = mapName(dest);
     const heal = /POKECENTER/.test(name) ? ' A Pokémon Center: the nurse heals the whole party for free. Healing here also makes it where you return if all your Pokémon faint.' : /MART/.test(name) ? ' A Poké Mart: buy items.' : /GYM/.test(name) ? ' A Pokémon Gym.' : '';
     destRegionsByKey.set(`w:${w.x},${w.y}`, destRegions);
-    add(`Enter ${name}`, `Door/stairs/ladder at (${w.x},${w.y}) leading to ${name}.${heal} ${routeFacts(dest, destRegions)}${svc(destRegions)} ${visitFacts(dest)}`, { kind: 'warp', x: w.x, y: w.y, dest }, path);
+    add(`Enter ${name}`, `Door/stairs/ladder at (${w.x},${w.y}) leading to ${name}.${heal} ${routeFacts(dest, destRegions)}${svc(destRegions)} ${visitFacts(dest)}${leaveNote}`, { kind: 'warp', x: w.x, y: w.y, dest }, path);
     seenWarp.push({ dest, land, c: out[out.length - 1] });
   });
 
@@ -415,7 +422,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     const inside = path2 && path2.length ? (path2.length > 1 ? path2[path2.length - 2] : { x: px, y: py }) : null;
     const destRegion = inside && md ? rg.connectionTarget(md, c, inside.x, inside.y) : null;
     destRegionsByKey.set(`e:${dir}`, destRegion ? [destRegion] : []);
-    add(`Go ${c.dir} to ${name}`, `Walk off the ${c.dir} edge of the map into ${name}. ${routeFacts(c.map, destRegion ? [destRegion] : [])}${svc(destRegion ? [destRegion] : [])} ${visitFacts(c.map)}`, { kind: 'exit', dir, dest: c.map }, path2);
+    add(`Go ${c.dir} to ${name}`, `Walk off the ${c.dir} edge of the map into ${name}. ${routeFacts(c.map, destRegion ? [destRegion] : [])}${svc(destRegion ? [destRegion] : [])} ${visitFacts(c.map)}${leaveNote}`, { kind: 'exit', dir, dest: c.map }, path2);
   }
 
   // NPCs / objects
