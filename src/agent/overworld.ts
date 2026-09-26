@@ -257,7 +257,12 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     return `Same distance from the objective (${h} areas).`;
   };
   // distances to services (nearest Pokémon Center / Mart), for healing and shopping intents
-  const serviceDist = (re: RegExp) => rg.distancesTo(Object.entries((gen as any).maps).filter(([, v]: any) => re.test(v.name)).flatMap(([id]) => rg.regionsOf(+id)), skip);
+  const serviceDist = (re: RegExp) => {
+    const ids = Object.entries((gen as any).maps).filter(([, v]: any) => re.test(v.name)).map(([id]) => +id);
+    // in a switch-gated building, the way out may need a switch press too
+    if (switchAfter) return switchDistances(rom, rg, switchAfter.alt, ids.flatMap((id) => rg.regionsOf(id)), ids.flatMap((id) => switchAfter!.alt.regionsOf(id)), skip).da;
+    return rg.distancesTo(ids.flatMap((id) => rg.regionsOf(id)), skip);
+  };
   const pcDist = serviceDist(/POKECENTER/), martDist = serviceDist(/_MART$/);
   lastServiceDist = { pc: pcDist, mart: martDist };
   const hereReg = hereRegion ? [hereRegion] : [];
