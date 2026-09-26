@@ -41,6 +41,8 @@ export interface Memory {
   fieldMoveNeeded?: 'CUT' | 'SURF';
   /** a first step the objective needs before its own location can be reached (set by the overworld) */
   subObjective?: string;
+  /** since when (ms) the current field-move first step has been unmet */
+  subSince?: number;
   /** whole-team losses by map: how many, and the team (species + levels) at the last one */
   losses?: Record<string, { count: number; team: string; moves?: string }>;
   /** last BILL's PC mode chosen (WITHDRAW/DEPOSIT/RELEASE), for list facts */
@@ -188,6 +190,7 @@ export function fieldMoveLearners(ctx: Ctx, mv: 'CUT' | 'SURF') {
     return undefined;
   };
   const routes: string[] = [];
+  const costs: { inBox: boolean; cost: number }[] = []; // levels + actions, for the stalled-prerequisite rule
   const describe = (m: { speciesId: number; nickname: string; species: string; level: number }, inBox: boolean) => {
     const c = chain(m.speciesId);
     if (!c) return;
@@ -204,6 +207,7 @@ export function fieldMoveLearners(ctx: Ctx, mv: 'CUT' | 'SURF') {
       `teach ${HM_FOR[mv].hm}`,
     ];
     routes.push(`${m.nickname} (${m.species}, ${inBox ? 'PC box' : 'team'}): ${parts.join(', then ')}`);
+    costs.push({ inBox, cost: levels + parts.length - (levels > 0 ? 1 : 0) + (inBox && party.length >= 6 ? 1 : 0) });
   };
   for (const m of party) describe(m, false);
   for (const m of box) describe(m, true);
@@ -212,6 +216,7 @@ export function fieldMoveLearners(ctx: Ctx, mv: 'CUT' | 'SURF') {
     box: box.filter((b) => can(b.speciesId)).map((b) => `${b.nickname} (${b.species} Lv${b.level})`),
     afterEvolving: [...later(party).map((t) => `in the party: ${t}`), ...later(box).map((t) => `in the PC box: ${t}`)],
     routes,
+    costs,
   };
 }
 function fieldMoveFact(ctx: Ctx, mv: 'CUT' | 'SURF') {

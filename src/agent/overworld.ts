@@ -152,7 +152,11 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       const inBox = l.box.length > 0 || l.afterEvolving.some((t) => t.startsWith('in the PC box') && /one is in the bag/.test(t));
       const inParty = l.party.length > 0 || l.afterEvolving.some((t) => t.startsWith('in the party') && !/none in the bag/.test(t));
       // a team member can already get there (learn it now, or evolve with an item in the bag): no PC trip needed
-      if (inParty) mem.subObjective = `a team Pokémon that knows ${mem.fieldMoveNeeded} (a team member can ${l.party.length ? 'learn it' : 'learn it after evolving'})`;
+      // stalled for 45+ minutes: go by the way that takes the fewest levels + actions (a PC trip if that's the box)
+      const stalled = Date.now() - (mem.subSince ?? Date.now()) > 45 * 60_000;
+      const best = [...l.costs].sort((a, b) => a.cost - b.cost)[0];
+      const boxFastest = stalled && !l.party.length && !!best?.inBox;
+      if (inParty && !boxFastest) mem.subObjective = `a team Pokémon that knows ${mem.fieldMoveNeeded} (a team member can ${l.party.length ? 'learn it' : 'learn it after evolving'})`;
       else if (inBox) {
         mem.subObjective = `a team Pokémon that knows ${mem.fieldMoveNeeded} (the PC box at any Pokémon Center holds Pokémon that can learn it)`;
         objMapsNow = [...rom.maps.values()].filter((mm) => /POKECENTER/.test(mm.name)).map((mm) => mm.id);
@@ -163,6 +167,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       }
     }
   }
+  // track how long a field-move prerequisite has been unmet
+  if (mem.fieldMoveNeeded) mem.subSince ??= Date.now(); else mem.subSince = undefined;
   lastObjectiveDist = { dist, rg, objMaps: objMapsNow, atRegion };
   lastObjectiveReachable = isFinite(hereHops);
   // Getting closer to the objective counts as progress (mazes need back-and-forth without new maps)
