@@ -164,19 +164,20 @@ export function fieldMoveLearners(ctx: Ctx, mv: 'CUT' | 'SURF') {
   const can = (speciesId: number) => hmId !== undefined && ctx.rom.canLearnMachine(speciesId, hmId);
   // not yet, but after evolving (by level or with an item; trades aren't possible here)
   const bag = new Set(ctx.gs.bag().map((i) => i.name));
-  const viaEvo = (speciesId: number): string | undefined => {
+  const viaEvo = (speciesId: number, level?: number): string | undefined => {
     for (const e of ctx.rom.evolutions(speciesId)) {
       if (e.method === 'trade') continue;
       const into = ctx.rom.species.get(e.into)?.name ?? '?';
-      const how = e.method === 'level' ? `at Lv${e.level}` : `with a ${ctx.rom.items.get(e.item!) ?? 'item'} (${bag.has(ctx.rom.items.get(e.item!) ?? '') ? 'one is in the bag' : 'none in the bag'})`;
+      // level evolutions happen on a level-up: already past the level means its next level-up
+      const how = e.method === 'level' ? (level !== undefined && level >= e.level! ? `on its next level-up (it's past Lv${e.level})` : `at Lv${e.level}`) : `with a ${ctx.rom.items.get(e.item!) ?? 'item'} (${bag.has(ctx.rom.items.get(e.item!) ?? '') ? 'one is in the bag' : 'none in the bag'})`;
       if (can(e.into)) return `evolves into ${into} ${how}, which can learn it`;
-      const next = viaEvo(e.into);
+      const next = viaEvo(e.into, e.method === 'level' ? Math.max(level ?? 0, e.level!) : level);
       if (next) return `evolves into ${into} ${how}, then ${next}`;
     }
     return undefined;
   };
   const later = (list: { speciesId: number; nickname: string; species: string; level: number }[]) =>
-    list.filter((p) => !can(p.speciesId)).map((p) => { const v = viaEvo(p.speciesId); return v ? `${p.nickname} (${p.species} Lv${p.level}) ${v}` : ''; }).filter(Boolean);
+    list.filter((p) => !can(p.speciesId)).map((p) => { const v = viaEvo(p.speciesId, p.level); return v ? `${p.nickname} (${p.species} Lv${p.level}) ${v}` : ''; }).filter(Boolean);
   const party = ctx.gs.party(), box = ctx.gs.box();
   // what each way takes: levels to gain, items to use, PC moves, then teaching the HM (plain counts, no ranking)
   const chain = (speciesId: number, depth = 0): { level?: number; item?: string }[] | undefined => {
