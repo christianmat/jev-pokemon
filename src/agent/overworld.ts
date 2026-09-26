@@ -77,8 +77,9 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   // exits that stopped us at least twice are left out of route distances until one works again
   const skip = new Set(Object.entries(mem.blockedEdges ?? {}).filter(([, n]) => n >= 2).map(([e]) => e));
   // the objective's area: a specific spot when the milestone gives one (a map can have unconnected parts)
-  const atMap = m?.at && !need ? objMaps.find((id) => mapName(id) === m.at!.map) : undefined;
-  const atRegion = atMap !== undefined ? rg.regionAt(atMap, m!.at!.x, m!.at!.y) : null;
+  const at = need ? need.at : m?.at;
+  const atMap = at ? objMaps.find((id) => mapName(id) === at.map) : undefined;
+  const atRegion = atMap !== undefined && at ? rg.regionAt(atMap, at.x, at.y) : null;
   const objRegions = atRegion ? [atRegion] : objMaps.flatMap((id) => rg.regionsOf(id));
   const inObjective = (map: number, regions: (string | null)[]) => (atRegion ? regions.includes(atRegion) : objMaps.includes(map));
   const dist = rg.distancesTo(objRegions, skip);
