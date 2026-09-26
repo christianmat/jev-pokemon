@@ -111,6 +111,14 @@ export class Jev {
     const { picked } = await this.ask(purpose, state, { decision: { type: 'choice', instructions, criteria: options } });
     return picked.decision as string;
   }
+
+  /** Like choose(), plus Jev's probabilities (for loop breaking). */
+  async chooseP(purpose: string, state: JevInput, instructions: string, options: Record<string, string>): Promise<{ choice: string; probabilities?: Record<string, number> }> {
+    const keys = Object.keys(options);
+    if (keys.length === 1) return { choice: keys[0] };
+    const { picked, answers } = await this.ask(purpose, state, { decision: { type: 'choice', instructions, criteria: options } });
+    return { choice: picked.decision as string, probabilities: (answers.decision as { probabilities?: Record<string, number> })?.probabilities };
+  }
 }
 
 /** Exploration: mix Jev's distribution 50/50 with uniform so a 100% answer can't lock a loop. */
