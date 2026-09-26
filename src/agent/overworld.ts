@@ -314,7 +314,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
   const out: Candidate[] = [];
   const add = (key: string, desc: string, target: Target, path: Step[] | null) => {
     if (!path) return;
-    const n = used(key);
+    // walking for wild encounters is meant to be repeated: no 'chosen N times' count on it
+    const n = target.kind === 'grass' ? 0 : used(key);
     const blockedN = mem.blockedExits?.[`${gs.mapName}:${key}`] ?? 0;
     // stopped 5+ times: a dead end for now, not offered until a badge, the objective or the bag changes
     if (blockedN >= 5) return;
