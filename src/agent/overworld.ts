@@ -386,7 +386,12 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       const ix = Math.min(Math.max(x, 0), g.w - 1), iy = Math.min(Math.max(y, 0), g.h - 1);
       return !!md && !!rg.connectionTarget(md, c, ix, iy);
     };
-    const exitGoal = (x: number, y: number) => allowExit(x, y) && landsOk(x, y);
+    // walking (not surfing) can't step from land onto water across the edge either
+    const exitGoal = (x: number, y: number) => {
+      if (!allowExit(x, y) || !landsOk(x, y)) return false;
+      const ix = Math.min(Math.max(x, 0), g.w - 1), iy = Math.min(Math.max(y, 0), g.h - 1);
+      return !(md && !g.water(ix, iy) && rg.landsOnWater(md, c, ix, iy));
+    };
     const path2 = findPath(g, px, py, exitGoal, { blocked, allowExit: exitGoal, grassCost: 1, surf });
     const inside = path2 && path2.length ? (path2.length > 1 ? path2[path2.length - 2] : { x: px, y: py }) : null;
     const destRegion = inside && md ? rg.connectionTarget(md, c, inside.x, inside.y) : null;

@@ -255,6 +255,14 @@ export class RegionGraph {
     return this.regionAt(c.map, nx, ny);
   }
 
+  /** Does walking off this edge square land on water in the next map? (needs SURF: walking can't enter water) */
+  landsOnWater(md: MapData, c: MapData['connections'][number], x: number, y: number): boolean {
+    const nx = c.dir === 'north' || c.dir === 'south' ? x + c.xAlign : c.xAlign;
+    const ny = c.dir === 'west' || c.dir === 'east' ? y + c.yAlign : c.yAlign;
+    const dm = this.rom.maps.get(c.map), g = this.grids.get(c.map);
+    return !!dm && !!g && WATER_TILESETS.has(dm.tileset) && g.tile(nx, ny) === 0x14;
+  }
+
   private link(md: MapData) {
     const g = this.grids.get(md.id);
     if (!g) return;
