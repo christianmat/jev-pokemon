@@ -956,6 +956,9 @@ export async function execute(ctx: Ctx, c: Candidate, agent: Agent): Promise<Wal
       const tx = sp?.x ?? t.x, ty = sp?.y ?? t.y;
       ctx.mem.lastInteraction = `${gs.mapName}:npc${t.index}`;
       ctx.mem.currentTalk = [];
+      // a talk with a shop clerk is the shopping trip: once it's over, the shop focus is done (bought or not),
+      // also for clerks outside a Mart (Indigo Plateau lobby)
+      if (t.sprite === 'CLERK' && ctx.mem.intent?.value === 'shop') ctx.mem.shopDone = true;
       ctx.mem.talked[ctx.mem.lastInteraction] = (ctx.mem.talked[ctx.mem.lastInteraction] ?? 0) + 1;
       face(ctx, tx, ty);
       tap(ctx, 'A', 20);
