@@ -233,7 +233,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       if (inParty && !boxFastest) mem.subObjective = `a team Pokémon that knows ${mem.fieldMoveNeeded} (a team member can ${l.party.length ? 'learn it' : 'learn it after evolving'})`;
       else if (inBox) {
         mem.subObjective = `a team Pokémon that knows ${mem.fieldMoveNeeded} (the PC box at any Pokémon Center holds Pokémon that can learn it)`;
-        objMapsNow = [...rom.maps.values()].filter((mm) => /POKECENTER/.test(mm.name)).map((mm) => mm.id);
+        objMapsNow = [...rom.maps.values()].filter((mm) => PC_MAPS.test(mm.name)).map((mm) => mm.id);
         atRegion = null;
         objRegions = objMapsNow.flatMap((id) => rg.regionsOf(id));
         dist = rg.distancesTo(objRegions, skip);
@@ -288,7 +288,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     }
     return rg.distancesTo(ids.flatMap((id) => rg.regionsOf(id)), skip);
   };
-  const pcDist = serviceDist(/POKECENTER/), martDist = serviceDist(/_MART$/);
+  const pcDist = serviceDist(PC_MAPS), martDist = serviceDist(MART_MAPS);
   lastServiceDist = { pc: pcDist, mart: martDist };
   const hereReg = hereRegion ? [hereRegion] : [];
   // the "by layout" view treats other floors' boulders as floor, which can fake a way to a Pokémon Center through
@@ -395,7 +395,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     if (prev && prev.path.length <= path.length) return;
     if (prevE) { out.splice(out.indexOf(prevE.c), 1); seenWarp.splice(seenWarp.indexOf(prevE), 1); }
     const name = mapName(dest);
-    const heal = /POKECENTER/.test(name) ? ' A Pokémon Center: the nurse heals the whole party for free. Healing here also makes it where you return if all your Pokémon faint.' : /MART/.test(name) ? ' A Poké Mart: buy items.' : /GYM/.test(name) ? ' A Pokémon Gym.' : '';
+    const heal = PC_MAPS.test(name) ? ' A Pokémon Center: the nurse heals the whole party for free. Healing here also makes it where you return if all your Pokémon faint.' : /MART/.test(name) ? ' A Poké Mart: buy items.' : /GYM/.test(name) ? ' A Pokémon Gym.' : '';
     destRegionsByKey.set(`w:${w.x},${w.y}`, destRegions);
     add(`Enter ${name}`, `Door/stairs/ladder at (${w.x},${w.y}) leading to ${name}.${heal} ${routeFacts(dest, destRegions)}${svc(destRegions)} ${visitFacts(dest)}${leaveNote}`, { kind: 'warp', x: w.x, y: w.y, dest }, path);
     seenWarp.push({ dest, land, c: out[out.length - 1] });
@@ -509,7 +509,7 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
         const now = hereRegion ? sv.da.get(hereRegion) : undefined, then = sv.db.get(r);
         return then !== undefined && (now === undefined || then < now) ? ` After pressing it: toward the nearest ${label} (${then} areas).` : '';
       };
-      const svcNote = svcAfter('POKECENTER', 'Pokémon Center') + svcAfter('_MART$', 'Poké Mart');
+      const svcNote = svcAfter(PC_MAPS.source, 'Pokémon Center') + svcAfter(MART_MAPS.source, 'Poké Mart');
       // compare with NOT pressing, standing at the same switch (walking there can already change the distance)
       const ra = rg.regionAt(gs.mapId, h.x, h.y + 1);
       const without = ra ? (inObjective(gs.mapId, [ra]) ? 0 : dist.get(ra)) : undefined;
@@ -862,8 +862,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     for (const c of out) c.desc = c.desc.replace(/ ?(Leads toward the objective|Leads away from the objective|Same distance from the objective|Does not lead toward the objective) \((?:[^()]|\([^()]*\))*\)( \(by the map layout[^)]*\))?\./g, '').trim();
   }
   // can a Pokémon Center be reached from here at all? (a heal focus with no way to one isn't offered)
-  healReachable = { map: gs.mapId, ok: /POKECENTER/.test(gs.mapName) || out.some((c) => /Pokémon Center/.test(c.desc) || c.key.includes('NURSE')),
-    mart: /MART/.test(gs.mapName) || out.some((c) => /Poké Mart/.test(c.desc) || c.key.includes('CLERK')) };
+  healReachable = { map: gs.mapId, ok: PC_MAPS.test(gs.mapName) || out.some((c) => /Pokémon Center/.test(c.desc) || c.key.includes('NURSE')),
+    mart: MART_MAPS.test(gs.mapName) || /MART/.test(gs.mapName) || out.some((c) => /Poké Mart/.test(c.desc) || c.key.includes('CLERK')) };
   return out;
 }
 
@@ -1060,6 +1060,9 @@ function lossBlockedPlace(ctx: Ctx): string | null {
   const hit = Object.entries(ctx.mem.losses ?? {}).find(([, l]) => l.count >= 2 && lineup(l.team) === lineup(teamNow) && levels(teamNow) - levels(l.team) < 5 && (!l.moves || l.moves === movesNow));
   return hit ? hit[0] : null;
 }
+// places with a nurse / a shop clerk (the Indigo Plateau lobby has both without being named a Pokémon Center / Mart)
+const PC_MAPS = /POKECENTER|^INDIGO_PLATEAU_LOBBY$/;
+const MART_MAPS = /_MART$|^INDIGO_PLATEAU_LOBBY$/;
 const E4_ROOMS = /^(LORELEIS|BRUNOS|AGATHAS|LANCES|CHAMPIONS)_ROOM$/;
 
 const FOCUS_TTL = 30;

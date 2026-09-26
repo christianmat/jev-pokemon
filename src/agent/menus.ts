@@ -162,7 +162,7 @@ export async function decideMenu(ctx: Ctx, purpose: string, extraFacts: (label: 
   }
   // loop guard for PC sessions: 15 menu choices with no change to team, box or bag -> log off
   // any menu inside a Pokémon Center counts (also a session resumed after a restart)
-  const pc = /POKECENTER/.test(ctx.gs.mapName) && !ctx.gs.inBattle ? (ctx.mem.pcSession ??= { steps: 0, sig: '' }) : ctx.mem.pcSession;
+  const pc = /POKECENTER|^INDIGO_PLATEAU_LOBBY$/.test(ctx.gs.mapName) && !ctx.gs.inBattle ? (ctx.mem.pcSession ??= { steps: 0, sig: '' }) : ctx.mem.pcSession;
   if (pc) {
     const sig = `${ctx.gs.party().map((p) => p.species + p.level).join(',')}|${ctx.gs.box().map((b) => b.species).join(',')}|${ctx.gs.bag().map((i) => i.name + i.qty).join(',')}`;
     if (sig !== pc.sig) { pc.sig = sig; pc.steps = 0; }
