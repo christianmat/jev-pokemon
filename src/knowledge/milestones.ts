@@ -6,13 +6,13 @@ import type { GameState } from '../game/state.js';
  * The agent (Jev) still decides every action: where to walk, who to talk to, what to answer,
  * how to fight, when to heal/grind/catch.
  */
-export interface Need { item: RegExp; maps: string[]; what: string; at?: { map: string; x: number; y: number } }
+export interface Need { item: RegExp; done?: (g: GameState) => boolean; maps: string[]; what: string; at?: { map: string; x: number; y: number } }
 
 /** The first prerequisite item not in the bag yet (in order), if any. */
 export function missingNeed(m: Milestone | null | undefined, g: GameState): Need | undefined {
   if (!m?.needs) return undefined;
   const list = Array.isArray(m.needs) ? m.needs : [m.needs];
-  return list.find((n) => !g.bag().some((i) => n.item.test(i.name)));
+  return list.find((n) => !n.done?.(g) && !g.bag().some((i) => n.item.test(i.name)));
 }
 
 export interface Milestone {
@@ -55,7 +55,7 @@ export const MILESTONES: Milestone[] = [
   { id: 'koga', goal: 'Defeat Koga at the Fuchsia City Gym (Poison type; Psychic and Ground moves are strong).', maps: ['FUCHSIA_GYM'], done: badge(4), level: 43, types: ['POISON'] },
   { id: 'surf', goal: 'In the Safari Zone (north of Fuchsia), reach the Secret House to get HM03 (Surf); also find the Gold Teeth and give them to the Warden for HM04 (Strength).', maps: ['SAFARI_ZONE_SECRET_HOUSE'], done: ev('EVENT_GOT_HM03'), level: 36 },
   { id: 'strength', goal: 'Give the Gold Teeth to the Safari Zone Warden in Fuchsia City to get HM04 (Strength).', maps: ['WARDENS_HOUSE'], done: ev('EVENT_GOT_HM04'), level: 36 },
-  { id: 'silph', goal: 'Enter Silph Co. in Saffron City (give the guard a drink from the Celadon rooftop vending machine to pass), use the Card Key, and defeat Giovanni.', maps: ['SILPH_CO_11F'], needs: [{ item: /FRESH WATER|SODA POP|LEMONADE|CARD KEY/, maps: ['CELADON_MART_ROOF'], what: 'a drink from the Celadon Dept. Store rooftop vending machines' }, { item: /CARD KEY/, maps: ['SILPH_CO_5F'], what: 'the Card Key (Silph Co.)', at: { map: 'SILPH_CO_5F', x: 21, y: 16 } }], at: { map: 'SILPH_CO_11F', x: 6, y: 10 }, done: ev('EVENT_BEAT_SILPH_CO_GIOVANNI'), level: 41 },
+  { id: 'silph', goal: 'Enter Silph Co. in Saffron City (give the guard a drink from the Celadon rooftop vending machine to pass), use the Card Key, and defeat Giovanni.', maps: ['SILPH_CO_11F'], needs: [{ item: /FRESH WATER|SODA POP|LEMONADE|CARD KEY/, done: (g) => !!(g.u8('wStatusFlags1') & 0x40), maps: ['CELADON_MART_ROOF'], what: 'a drink from the Celadon Dept. Store rooftop vending machines' }, { item: /CARD KEY/, maps: ['SILPH_CO_5F'], what: 'the Card Key (Silph Co.)', at: { map: 'SILPH_CO_5F', x: 21, y: 16 } }], at: { map: 'SILPH_CO_11F', x: 6, y: 10 }, done: ev('EVENT_BEAT_SILPH_CO_GIOVANNI'), level: 41 },
   { id: 'sabrina', goal: 'Defeat Sabrina at the Saffron City Gym (Psychic type; Bug moves are strong, teleport pads connect the rooms).', maps: ['SAFFRON_GYM'], done: badge(5), level: 43, types: ['PSYCHIC'] },
   { id: 'cinnabar', goal: 'Surf south from Pallet Town (Route 21) to Cinnabar Island. Explore the Pokémon Mansion to find the Secret Key.', maps: ['POKEMON_MANSION_B1F'], done: hasItem('SECRET KEY'), level: 40 },
   { id: 'blaine', goal: 'Defeat Blaine at the Cinnabar Island Gym (Fire type; Water and Ground moves are strong).', maps: ['CINNABAR_GYM'], done: badge(6), level: 47, types: ['FIRE'] },
