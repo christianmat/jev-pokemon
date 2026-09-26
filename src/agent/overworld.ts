@@ -345,7 +345,17 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
         const without = new Set(blocked); without.delete(`${sp.x},${sp.y}`); without.delete(`${w.x},${w.y}`);
         return !!findPath(g, px, py, (x, y) => x === w.x && y === w.y, { blocked: without, surf });
       });
-      for (const sp of openers) blockers.set(sp.index, `Standing in the only path to the exit at (${w.x},${w.y}) to ${mapName(dest)}. That exit: ${routeFacts(dest, destRegions)}`);
+      // a boulder in the way: does any single push (to open floor) actually clear that path?
+      const pushClears = (sp: { x: number; y: number }) => Object.values(DIRS).some(([dx, dy]) => {
+        const tx = sp.x + dx, ty = sp.y + dy;
+        if (!g.walkable(sp.x - dx, sp.y - dy) || !g.walkable(tx, ty) || blocked.has(`${tx},${ty}`)) return false;
+        const moved = new Set(blocked); moved.delete(`${sp.x},${sp.y}`); moved.delete(`${w.x},${w.y}`); moved.add(`${tx},${ty}`);
+        return !!findPath(g, px, py, (x, y) => x === w.x && y === w.y, { blocked: moved, surf });
+      });
+      for (const sp of openers) {
+        const boulderNote = SPRITES[sp.picture] === 'BOULDER' && !pushClears(sp) ? ' No single push clears that path: wherever it is pushed, it still blocks the way.' : '';
+        blockers.set(sp.index, `Standing in the only path to the exit at (${w.x},${w.y}) to ${mapName(dest)}.${boulderNote} That exit: ${routeFacts(dest, destRegions)}`);
+      }
       const stopAt = open?.[0];
       const person = openers[0];
       const dbgKey = `${gs.mapName}:${w.x},${w.y}`;
