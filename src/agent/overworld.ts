@@ -574,9 +574,24 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
       });
       // the floor switches are visible on screen: how far this boulder would be from the nearest free one
       const freeSw = (FLOOR_FEATURES[gs.mapName] ?? []).filter((f) => f.kind === 'switch' && !boulders.some((o) => o.x === f.x && o.y === f.y));
-      const near = (x: number, y: number) => Math.min(...freeSw.map((f) => Math.abs(f.x - x) + Math.abs(f.y - y)));
+      // distance over open floor (walls count; other boulders block), not a straight line
+      const near = (x0: number, y0: number) => {
+        const seen = new Set([`${x0},${y0}`]); let front = [[x0, y0]], d = 0;
+        while (front.length && d < 200) {
+          if (front.some(([x, y]) => freeSw.some((f) => f.x === x && f.y === y))) return d;
+          const next: number[][] = [];
+          for (const [x, y] of front) for (const [ex, ey] of Object.values(DIRS)) {
+            const nx = x + ex, ny = y + ey, k = `${nx},${ny}`;
+            if (seen.has(k) || !g.walkable(nx, ny) || boulders.some((o) => o !== b && o.x === nx && o.y === ny)) continue;
+            seen.add(k); next.push([nx, ny]);
+          }
+          front = next; d++;
+        }
+        return Infinity;
+      };
+      const dTxt = (v: number) => (isFinite(v) ? `${v} squares` : 'no open floor path');
       const sw = freeSw.length && feature?.kind !== 'switch'
-        ? `Floor switch${freeSw.length > 1 ? 'es' : ''} on this floor at ${freeSw.map((f) => `(${f.x},${f.y})`).join(', ')}; after this push the boulder is ${near(tx, ty)} squares from the nearest (now ${near(b.x, b.y)}).` : '';
+        ? `Floor switch${freeSw.length > 1 ? 'es' : ''} on this floor at ${freeSw.map((f) => `(${f.x},${f.y})`).join(', ')}; after this push the boulder is ${dTxt(near(tx, ty))} from the nearest over open floor (now ${dTxt(near(b.x, b.y))}).` : '';
       const facts = [
         `Moves the boulder one square ${d} to (${tx},${ty}).`,
         feature ? `That square is a ${feature.kind === 'switch' ? 'floor switch' : 'hole in the floor'}.` : '',
