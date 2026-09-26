@@ -109,6 +109,10 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     ctx.log('info', `got ${mem.needsMissing}: cleared earlier "did not get through" records`);
   }
   mem.needsMissing = need?.what;
+  // a new badge / objective / item can open what stopped us before: forget the "did not get through" counts then
+  const blockSig = `${gs.badges}|${currentMilestone(gs).index}|${gs.bag().map((i) => i.name).sort().join(',')}`;
+  if (mem.blockSig !== undefined && mem.blockSig !== blockSig) mem.blockedExits = {};
+  mem.blockSig = blockSig;
   const needsItem = !!need;
   const objMaps = (need ? need.maps : m?.maps ?? []).map((n) => Object.entries((gen as any).maps).find(([, v]: any) => v.name === n)?.[0]).filter(Boolean).map(Number);
   // exits that stopped us at least twice are left out of route distances until one works again
@@ -185,6 +189,8 @@ export function buildCandidates(ctx: Ctx): Candidate[] {
     if (!path) return;
     const n = used(key);
     const blockedN = mem.blockedExits?.[`${gs.mapName}:${key}`] ?? 0;
+    // stopped 5+ times: a dead end for now, not offered until a badge, the objective or the bag changes
+    if (blockedN >= 5) return;
     const stopSaid = mem.npcText[`${gs.mapName}:${key}:blocked`];
     const blockedNote = blockedN ? ` Tried ${blockedN} time(s) before and did NOT get through (something stopped you / sent you back).${stopSaid ? ` What was said when you were stopped: "${clip(stopSaid)}".` : ''}` : '';
     out.push({ key, target, path, desc: `${desc} ${path.length} steps away.${n ? ` Chosen ${n} time(s) already on this visit.` : ''}${blockedNote}` });
